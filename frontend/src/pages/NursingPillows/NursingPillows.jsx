@@ -32,7 +32,7 @@ const API_URL =
         }
 
         const response = await axios.get(
-          `${API_URL}/products`
+          `${API_URL}/admin/products`
         );
 
         const allProducts = Array.isArray(

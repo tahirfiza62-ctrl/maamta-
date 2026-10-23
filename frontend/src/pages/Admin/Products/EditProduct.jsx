@@ -452,7 +452,7 @@ const EditProduct = () => {
 
         const response =
           await axios.get(
-            `${API_URL}/${id}`,
+            `${API_URL}/admin/${id}`,
             {
               headers: {
                 Authorization:
@@ -1066,7 +1066,7 @@ if (!allowedCategories.includes(normalizedCategory)) {
       ================================================== */
 
       await axios.put(
-        `${API_URL}/${id}`,
+        `${API_URL}/admin/${id}`,
         data,
         {
           headers: {

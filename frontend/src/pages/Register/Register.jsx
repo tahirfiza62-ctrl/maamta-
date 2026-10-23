@@ -106,7 +106,7 @@ const API_URL =
       ===================================================== */
 
       const response = await axios.post(
-        `${API_URL}/auth/register`,
+        `${API_URL}/admin/auth/register`,
         {
           name,
           email,

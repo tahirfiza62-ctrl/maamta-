@@ -49,7 +49,7 @@ const API_URL =
         setError("");
 
         const response = await axios.get(
-          `${API_URL}/orders`,
+          `${API_URL}/admin/orders`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

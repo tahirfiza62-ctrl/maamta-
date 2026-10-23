@@ -58,7 +58,7 @@ const AdminOrderDetails = () => {
 
         const response =
           await axios.get(
-            `${API_URL}/${id}`,
+            `${API_URL}/admin/${id}`,
             {
               headers: {
                 Authorization:
@@ -147,7 +147,7 @@ const AdminOrderDetails = () => {
 
         const response =
           await axios.put(
-            `${API_URL}/${id}/status`,
+            `${API_URL}/admin/${id}/status`,
             {
               status,
             },

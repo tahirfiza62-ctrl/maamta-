@@ -55,7 +55,7 @@ const AdminContacts = () => {
 
       try {
         const response = await axios.get(
-          `${API_URL}/contact`,
+          `${API_URL}/admin/admin/contact`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -109,7 +109,7 @@ const AdminContacts = () => {
 
     try {
       await axios.patch(
-        `${API_URL}/contact/${id}/status`,
+        `${API_URL}/admin/admin/contact/${id}/status`,
         { status },
         {
           headers: {
@@ -159,7 +159,7 @@ const AdminContacts = () => {
 
     try {
       await axios.delete(
-        `${API_URL}/contact/${id}`,
+        `${API_URL}/admin/admin/contact/${id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

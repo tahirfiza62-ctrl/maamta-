@@ -118,7 +118,7 @@ export default function ProductReviews({
     setLoading(true);
 
     try {
-      const response = await axios.get(`${API_URL}/reviews`, {
+      const response = await axios.get(`${API_URL}/admin/admin/reviews`, {
         params: {
           productId: resolvedProductId,
         },
@@ -161,7 +161,7 @@ export default function ProductReviews({
       }
 
       try {
-        const response = await axios.get(`${API_URL}/reviews`, {
+        const response = await axios.get(`${API_URL}/admin/admin/reviews`, {
           params: {
             productId: resolvedProductId,
           },
@@ -301,7 +301,8 @@ export default function ProductReviews({
       };
 
       const response = await axios.post(
-        `${API_URL}/reviews`,
+        `${API_URL}/admin/admin/reviews`,
+       
         payload
       );
 

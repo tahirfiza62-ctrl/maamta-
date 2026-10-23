@@ -204,7 +204,7 @@ useEffect(() => {
       setLoading(true);
 
       const response = await axios.post(
-        `${API_URL}/contact`,
+        `${API_URL}/admin/contact`,
         {
           name,
           email,
@@ -306,7 +306,7 @@ useEffect(() => {
       setReviewLoading(true);
 
       const response = await axios.post(
-        `${API_URL}/reviews`,
+        `${API_URL}/admin/reviews`,
         {
           name,
           city,

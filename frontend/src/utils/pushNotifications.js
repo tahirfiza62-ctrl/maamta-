@@ -125,7 +125,7 @@ export const registerPushNotifications =
       }
 
       await axios.post(
-        `${API_URL}/push/subscribe`,
+        `${API_URL}/admin/push/subscribe`,
         subscription.toJSON(),
         {
           headers: {
@@ -174,7 +174,7 @@ export const unregisterPushNotifications =
 
       if (token) {
         await axios.post(
-          `${API_URL}/push/unsubscribe`,
+          `${API_URL}/admin/push/unsubscribe`,
           {
             endpoint:
               subscription.endpoint,

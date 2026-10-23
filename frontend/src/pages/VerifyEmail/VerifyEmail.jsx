@@ -54,7 +54,7 @@ const API_URL =
       setMessage("");
 
       const response = await axios.post(
-        `${API_URL}/auth/verify-email`,
+        `${API_URL}/admin/auth/verify-email`,
         {
           email,
           code,

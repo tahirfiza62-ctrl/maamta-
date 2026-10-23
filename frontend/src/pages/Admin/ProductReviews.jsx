@@ -139,7 +139,7 @@ export default function Reviews() {
     const loadInitialReviews = async () => {
       try {
         const response = await axios.get(
-          `${API_URL}/reviews/admin/all`,
+          `${API_URL}/admin/admin/reviews/admin/all`,
           {
             headers: getAdminHeaders(),
             timeout: 15000,
@@ -191,7 +191,7 @@ export default function Reviews() {
 
     try {
       const response = await axios.get(
-        `${API_URL}/reviews/admin/all`,
+        `${API_URL}/admin/admin/reviews/admin/all`,
         {
           headers: getAdminHeaders(),
           timeout: 15000,
@@ -369,7 +369,7 @@ export default function Reviews() {
 
     try {
       const response = await axios.put(
-        `${API_URL}/reviews/${editingReview._id}`,
+        `${API_URL}/admin/admin/reviews/${editingReview._id}`,
         {
           name,
           city,
@@ -438,7 +438,7 @@ export default function Reviews() {
 
     try {
       const response = await axios.delete(
-        `${API_URL}/reviews/${review._id}`,
+        `${API_URL}/admin/admin/reviews/${review._id}`,
         {
           headers: getAdminHeaders(),
           timeout: 15000,
@@ -480,7 +480,7 @@ export default function Reviews() {
   const toggleApproval = async (review) => {
     try {
       const response = await axios.put(
-        `${API_URL}/reviews/${review._id}`,
+        `${API_URL}/admin/admin/reviews/${review._id}`,
         {
           name: review.name,
           city: review.city || review.place || "",

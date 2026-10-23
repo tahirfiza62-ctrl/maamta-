@@ -40,7 +40,7 @@ const API_URL =
 
     const loadCart = async () => {
       try {
-        const response = await axios.get(`${API_URL}/cart`, {
+        const response = await axios.get(`${API_URL}/admin/cart`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -113,7 +113,7 @@ const API_URL =
       setUpdatingId(updateKey);
 
       const response = await axios.put(
-        `${API_URL}/cart/update/${productId}`,
+        `${API_URL}/admin/cart/update/${productId}`,
         {
           quantity: Number(newQuantity),
           color: color || "",
@@ -189,7 +189,7 @@ const API_URL =
       setUpdatingId(updateKey);
 
       const response = await axios.delete(
-        `${API_URL}/cart/remove/${productId}`,
+        `${API_URL}/admin/cart/remove/${productId}`,
         {
           headers: {
             Authorization:
@@ -262,7 +262,7 @@ const API_URL =
 
     try {
       await axios.delete(
-        `${API_URL}/cart/clear`,
+        `${API_URL}/admin/cart/clear`,
         {
           headers: {
             Authorization:

@@ -73,7 +73,7 @@ const AdminProducts = () => {
       }
 
       const response = await axios.get(
-        `${API_URL}/all`,
+        `${API_URL}/admin/all`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -159,7 +159,7 @@ const AdminProducts = () => {
 
 
         const response = await axios.get(
-          `${API_URL}/all`,
+          `${API_URL}/admin/all`,
           {
             headers: {
               Authorization:
@@ -368,7 +368,7 @@ const AdminProducts = () => {
 
 
       await axios.delete(
-        `${API_URL}/${id}`,
+        `${API_URL}/admin/${id}`,
         {
           headers: {
             Authorization:

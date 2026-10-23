@@ -53,7 +53,7 @@ const BabyPillows = () => {
     const loadBabyProducts = async () => {
       try {
         const response = await axios.get(
-          `${API_URL}/products`
+          `${API_URL}/admin/products`
         );
 
         const allProducts =
@@ -435,7 +435,7 @@ const BabyPillows = () => {
       ------------------------------------------- */
 
       await axios.post(
-        `${API_URL}/cart/add`,
+        `${API_URL}/admin/cart/add`,
         {
           productId:
             productId,

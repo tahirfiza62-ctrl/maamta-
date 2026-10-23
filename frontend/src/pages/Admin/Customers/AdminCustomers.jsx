@@ -254,7 +254,7 @@ const AdminCustomers = () => {
 
         const response =
           await axios.patch(
-            `${API_URL}/${customer._id}/status`,
+            `${API_URL}/admin/admin/${customer._id}/status`,
             {
               active:
                 !customer.active,
@@ -344,7 +344,7 @@ const AdminCustomers = () => {
         }
 
         await axios.delete(
-          `${API_URL}/${customer._id}`,
+          `${API_URL}/admin/${customer._id}`,
           {
             headers: {
               Authorization:

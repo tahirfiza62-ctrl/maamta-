@@ -33,7 +33,7 @@ const API_URL =
         setLoading(true);
 
         const response = await axios.get(
-          `${API_URL}/products`
+          `${API_URL}/admin/products`
         );
 
         const data = response.data;

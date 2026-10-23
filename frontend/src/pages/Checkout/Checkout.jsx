@@ -95,7 +95,7 @@ const Checkout = () => {
         setLoading(true);
 
         const response = await axios.get(
-          `${API_URL}/cart`,
+          `${API_URL}/admin/cart`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -343,7 +343,7 @@ const Checkout = () => {
 
       if (paymentMethod === "Cash on Delivery") {
         const response = await axios.post(
-          `${API_URL}/orders`,
+          `${API_URL}/admin/orders`,
           orderData,
           {
             headers: {
@@ -373,7 +373,7 @@ const Checkout = () => {
       /* ONLINE PAYMENT */
 
       const paymentResponse = await axios.post(
-        `${API_URL}/payments/create`,
+        `${API_URL}/admin/payments/create`,
         orderData,
         {
           headers: {

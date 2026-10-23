@@ -79,7 +79,7 @@ const API_URL =
     const fetchOrder = async () => {
       try {
         const response = await axios.get(
-          `${API_URL}/orders/${id}`,
+          `${API_URL}/admin/orders/${id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

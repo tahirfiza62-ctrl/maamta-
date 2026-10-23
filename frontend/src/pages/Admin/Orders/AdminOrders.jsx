@@ -185,7 +185,7 @@ const AdminOrders = () => {
         return;
       }
 
-      const response = await fetch(`${API_URL}/${orderId}`, {
+      const response = await fetch(`${API_URL}/admin/${orderId}`, {
         method: "DELETE",
 
         headers: {

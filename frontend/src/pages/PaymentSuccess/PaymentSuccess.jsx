@@ -68,7 +68,7 @@ const API_URL =
 
           const orderResponse =
             await axios.get(
-              `${API_URL}/orders/${orderId}`,
+              `${API_URL}/admin/orders/${orderId}`,
               {
                 headers: {
                   Authorization:
@@ -91,7 +91,7 @@ const API_URL =
 
           const paymentResponse =
             await axios.get(
-              `${API_URL}/payments/status/${tracker}`,
+              `${API_URL}/admin/payments/status/${tracker}`,
               {
                 headers: {
                   Authorization:

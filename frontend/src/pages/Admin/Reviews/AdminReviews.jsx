@@ -52,7 +52,7 @@ const AdminReviews = () => {
 
   // Load reviews from the backend.
   const fetchReviews = useCallback(async () => {
-    const response = await axios.get(`${API_URL}/reviews`);
+    const response = await axios.get(`${API_URL}/admin/reviews`);
 
     setReviews(normalizeReviews(response.data?.reviews));
   }, []);
@@ -63,7 +63,7 @@ const AdminReviews = () => {
 
     const initialLoad = async () => {
       try {
-        const response = await axios.get(`${API_URL}/reviews`);
+        const response = await axios.get(`${API_URL}/admin/reviews`);
 
         if (!cancelled) {
           setReviews(normalizeReviews(response.data?.reviews));
@@ -193,7 +193,7 @@ const AdminReviews = () => {
       setSaving(true);
 
       await axios.put(
-        `${API_URL}/reviews/${editingId}`,
+        `${API_URL}/admin/reviews/${editingId}`,
         payload,
         authConfig()
       );
@@ -233,7 +233,7 @@ const AdminReviews = () => {
       setDeletingId(review._id);
 
       await axios.delete(
-        `${API_URL}/reviews/${review._id}`,
+        `${API_URL}/admin/reviews/${review._id}`,
         authConfig()
       );
 

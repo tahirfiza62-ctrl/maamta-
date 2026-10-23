@@ -20,7 +20,7 @@ import "./Account.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "http://localhost:3000/api";
+  "https://mamta-app-8.onrender.com//api";
 
 const Account = () => {
   const navigate = useNavigate();
@@ -145,7 +145,7 @@ const Account = () => {
       const token = localStorage.getItem("mamta_user_token");
 
       await axios.put(
-        `${API_URL}/auth/change-password`,
+        `${API_URL}/admin/admin/auth/change-password`,
         {
           currentPassword: passwordData.currentPassword,
           newPassword: passwordData.newPassword,

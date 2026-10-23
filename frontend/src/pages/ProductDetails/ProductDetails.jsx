@@ -381,7 +381,7 @@ const ProductDetails = () => {
 
         console.log(
           "FETCHING PRODUCT:",
-          `${API_URL}/products/${id}`
+          `${API_URL}/admin/products/${id}`
         );
 
         console.log(
@@ -389,7 +389,7 @@ const ProductDetails = () => {
         );
 
         const response = await axios.get(
-          `${API_URL}/products/${id}`,
+          `${API_URL}/admin/products/${id}`,
           {
             timeout: 10000,
           }
@@ -1306,7 +1306,7 @@ I would like to know more about this product.`
         );
 
         await axios.post(
-          `${API_URL}/cart/add`,
+          `${API_URL}/admin/cart/add`,
           cartData,
           {
             headers: {

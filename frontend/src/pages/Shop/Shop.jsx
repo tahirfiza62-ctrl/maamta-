@@ -136,7 +136,7 @@ const Shop = () => {
         setLoadingProducts(true);
 
         const endpoint =
-          `${API_URL}/products`;
+          `${API_URL}/admin/products`;
 
         console.log(
           "===================================="
@@ -863,7 +863,7 @@ const Shop = () => {
 
     try {
       await axios.post(
-        `${API_URL}/cart/add`,
+        `${API_URL}/admin/cart/add`,
         {
           productId:
             product._id,

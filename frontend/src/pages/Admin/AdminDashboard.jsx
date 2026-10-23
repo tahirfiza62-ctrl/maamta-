@@ -36,7 +36,7 @@ const API_URL =
 
       const token = localStorage.getItem("mamta_admin_token");
 
-      const response = await axios.get(`${API_URL}/admin/dashboard`, {
+      const response = await axios.get(`${API_URL}/admin/admin/dashboard`, {
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -86,7 +86,7 @@ const API_URL =
 
         const token = localStorage.getItem("mamta_admin_token");
 
-        const response = await axios.get(`${API_URL}/admin/dashboard`, {
+        const response = await axios.get(`${API_URL}/admin/admin/dashboard`, {
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
@@ -149,7 +149,7 @@ const API_URL =
 
         const token = localStorage.getItem("mamta_admin_token");
 
-        const response = await axios.get(`${API_URL}/admin/dashboard`, {
+        const response = await axios.get(`${API_URL}/admin/admin/dashboard`, {
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
