@@ -6,9 +6,7 @@ import "./Accessories.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
-
-const Accessories = () => {
+  "https://maamta.onrender.com/api";const Accessories = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 

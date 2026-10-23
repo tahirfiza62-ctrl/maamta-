@@ -13,9 +13,7 @@ import "./ElderPillows.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
-
-const ElderPillows = () => {
+  "https://maamta.onrender.com/api";const ElderPillows = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [wishlist, setWishlist] = useState([]);

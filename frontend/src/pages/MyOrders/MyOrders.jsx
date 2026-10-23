@@ -23,9 +23,7 @@ import "./MyOrders.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
-
-const MyOrders = () => {
+  "https://maamta.onrender.com/api";const MyOrders = () => {
   const navigate = useNavigate();
 
   const [orders, setOrders] = useState([]);

@@ -2,9 +2,7 @@ import axios from "axios";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
-
-const getAdminToken = () => {
+  "https://maamta.onrender.com/api";const getAdminToken = () => {
   return localStorage.getItem(
     "mamta_admin_token"
   );

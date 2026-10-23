@@ -17,16 +17,22 @@ import {
 } from "lucide-react";
 import "./ProductReviews.css";
 
+/* =========================================================
+   API CONFIGURATION
+========================================================= */
+
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
+  "https://maamta.onrender.com/api";
+
+/* =========================================================
+   HELPERS
+========================================================= */
 
 const getAdminHeaders = () => {
   const token = localStorage.getItem("mamta_admin_token");
 
-  return token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const getReviews = (data) => {
@@ -35,6 +41,13 @@ const getReviews = (data) => {
   if (Array.isArray(data?.data)) return data.data;
   return [];
 };
+
+const getErrorMessage = (error) =>
+  error.response?.status === 401 || error.response?.status === 403
+    ? "Admin authentication failed. Please sign in again."
+    : error.response?.data?.message ||
+      error.message ||
+      "Something went wrong.";
 
 const formatDate = (date) => {
   if (!date) return "Date unavailable";
@@ -63,20 +76,6 @@ const getProductName = (review) => {
 
   return "General testimonial";
 };
-function RatingStars({ rating }) {
-  return (
-    <div className="mamta-admin-review-stars">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          key={star}
-          size={15}
-          fill={star <= Number(rating) ? "currentColor" : "none"}
-        />
-      ))}
-      <span>{Number(rating) || 0}/5</span>
-    </div>
-  );
-}
 
 const emptyForm = {
   name: "",
@@ -86,26 +85,109 @@ const emptyForm = {
   approved: true,
 };
 
+/* =========================================================
+   RATING STARS
+========================================================= */
+
+function RatingStars({ rating }) {
+  const numericRating = Number(rating) || 0;
+
+  return (
+    <div className="mamta-admin-review-stars">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          size={15}
+          fill={star <= numericRating ? "currentColor" : "none"}
+        />
+      ))}
+      <span>{numericRating}/5</span>
+    </div>
+  );
+}
+
+/* =========================================================
+   REVIEWS MANAGEMENT
+========================================================= */
+
 export default function Reviews() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const [editingReview, setEditingReview] = useState(null);
-  const [formData, setFormData] = useState(emptyForm);
+  const [formData, setFormData] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const fetchReviews = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+  /* =======================================================
+     INITIAL LOAD
+
+     The request is awaited before state is updated.
+     This avoids synchronously calling a state-updating
+     function directly from the effect.
+  ======================================================= */
+
+  useEffect(() => {
+    let active = true;
+
+    const loadInitialReviews = async () => {
+      try {
+        const response = await axios.get(
+          `${API_URL}/reviews/admin/all`,
+          {
+            headers: getAdminHeaders(),
+            timeout: 15000,
+          }
+        );
+
+        if (response.data?.success === false) {
+          throw new Error(
+            response.data.message || "Unable to load reviews."
+          );
+        }
+
+        if (active) {
+          setReviews(getReviews(response.data));
+        }
+      } catch (error) {
+        console.error(
+          "ADMIN REVIEWS ERROR:",
+          error.response?.data || error.message
+        );
+
+        if (active) {
+          setReviews([]);
+          toast.error(getErrorMessage(error));
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInitialReviews();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /* =======================================================
+     REFRESH REVIEWS
+
+     Used by the Refresh buttons and after edits when
+     the server does not return the updated review.
+  ======================================================= */
+
+  const fetchReviews = useCallback(async () => {
+    setRefreshing(true);
 
     try {
       const response = await axios.get(
@@ -125,33 +207,27 @@ export default function Reviews() {
       setReviews(getReviews(response.data));
     } catch (error) {
       console.error(
-        "ADMIN REVIEWS ERROR:",
+        "REFRESH REVIEWS ERROR:",
         error.response?.data || error.message
       );
 
-      toast.error(
-        error.response?.status === 401 ||
-        error.response?.status === 403
-          ? "Admin authentication failed. Please sign in again."
-          : error.response?.data?.message ||
-              error.message ||
-              "Unable to load reviews."
-      );
+      toast.error(getErrorMessage(error));
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [fetchReviews]);
+  /* =======================================================
+     STATISTICS
+  ======================================================= */
 
   const stats = useMemo(() => {
     const total = reviews.length;
+
     const approved = reviews.filter(
       (review) => review.approved !== false
     ).length;
+
     const pending = total - approved;
 
     const average = total
@@ -166,6 +242,10 @@ export default function Reviews() {
     return { total, approved, pending, average };
   }, [reviews]);
 
+  /* =======================================================
+     SEARCH AND FILTERS
+  ======================================================= */
+
   const filteredReviews = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -178,6 +258,7 @@ export default function Reviews() {
           review.name,
           review.city,
           review.message,
+          review.text,
           review.email,
           productName,
         ].some((value) =>
@@ -207,16 +288,26 @@ export default function Reviews() {
         matchesStatus
       );
     });
-  }, [reviews, search, ratingFilter, typeFilter, statusFilter]);
+  }, [
+    reviews,
+    search,
+    ratingFilter,
+    typeFilter,
+    statusFilter,
+  ]);
+
+  /* =======================================================
+     EDIT REVIEW
+  ======================================================= */
 
   const openEdit = (review) => {
     setEditingReview(review);
 
     setFormData({
       name: review.name || "",
-      city: review.city || "",
+      city: review.city || review.place || "",
       rating: Number(review.rating) || 5,
-      message: review.message || review.text || "",
+      message: review.message || review.text || review.review || "",
       approved: review.approved !== false,
     });
   };
@@ -225,7 +316,7 @@ export default function Reviews() {
     if (saving) return;
 
     setEditingReview(null);
-    setFormData(emptyForm);
+    setFormData({ ...emptyForm });
   };
 
   const handleFormChange = (event) => {
@@ -236,6 +327,10 @@ export default function Reviews() {
       [name]: value,
     }));
   };
+
+  /* =======================================================
+     SAVE REVIEW
+  ======================================================= */
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -305,11 +400,11 @@ export default function Reviews() {
           )
         );
       } else {
-        await fetchReviews(true);
+        await fetchReviews();
       }
 
       setEditingReview(null);
-      setFormData(emptyForm);
+      setFormData({ ...emptyForm });
       toast.success("Review updated successfully.");
     } catch (error) {
       console.error(
@@ -317,15 +412,15 @@ export default function Reviews() {
         error.response?.data || error.message
       );
 
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Unable to update review."
-      );
+      toast.error(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
   };
+
+  /* =======================================================
+     DELETE REVIEW
+  ======================================================= */
 
   const handleDelete = async (review) => {
     if (!review?._id) {
@@ -362,6 +457,7 @@ export default function Reviews() {
 
       if (editingReview?._id === review._id) {
         setEditingReview(null);
+        setFormData({ ...emptyForm });
       }
 
       toast.success("Review deleted successfully.");
@@ -371,15 +467,15 @@ export default function Reviews() {
         error.response?.data || error.message
       );
 
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Unable to delete review."
-      );
+      toast.error(getErrorMessage(error));
     } finally {
       setDeletingId(null);
     }
   };
+
+  /* =======================================================
+     APPROVE / HIDE REVIEW
+  ======================================================= */
 
   const toggleApproval = async (review) => {
     try {
@@ -389,7 +485,11 @@ export default function Reviews() {
           name: review.name,
           city: review.city || review.place || "",
           rating: Number(review.rating),
-          message: review.message || review.text || review.review || "",
+          message:
+            review.message ||
+            review.text ||
+            review.review ||
+            "",
           approved: review.approved === false,
         },
         {
@@ -400,7 +500,8 @@ export default function Reviews() {
 
       if (response.data?.success === false) {
         throw new Error(
-          response.data.message || "Unable to update review status."
+          response.data.message ||
+            "Unable to update review status."
         );
       }
 
@@ -415,7 +516,7 @@ export default function Reviews() {
           )
         );
       } else {
-        await fetchReviews(true);
+        await fetchReviews();
       }
 
       toast.success(
@@ -424,13 +525,18 @@ export default function Reviews() {
           : "Review hidden from customers."
       );
     } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Unable to update review status."
+      console.error(
+        "UPDATE REVIEW STATUS ERROR:",
+        error.response?.data || error.message
       );
+
+      toast.error(getErrorMessage(error));
     }
   };
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <section className="mamta-admin-reviews">
@@ -440,15 +546,13 @@ export default function Reviews() {
             CUSTOMER EXPERIENCE
           </span>
           <h1>Reviews Management</h1>
-          <p>
-            Manage customer feedback and product reviews for MAMTA.
-          </p>
+          <p>Manage customer feedback and product reviews for MAMTA.</p>
         </div>
 
         <button
           type="button"
           className="mamta-admin-refresh"
-          onClick={() => fetchReviews(true)}
+          onClick={fetchReviews}
           disabled={loading || refreshing}
         >
           <RefreshCw
@@ -496,7 +600,9 @@ export default function Reviews() {
           </span>
           <div>
             <span>Average rating</span>
-            <strong>{stats.average}<small> / 5</small></strong>
+            <strong>
+              {stats.average}<small> / 5</small>
+            </strong>
           </div>
         </article>
       </div>
@@ -570,8 +676,13 @@ export default function Reviews() {
           <button
             type="button"
             className="mamta-admin-refresh"
-            onClick={() => fetchReviews(true)}
+            onClick={fetchReviews}
+            disabled={refreshing}
           >
+            <RefreshCw
+              size={17}
+              className={refreshing ? "mamta-spin" : ""}
+            />
             Refresh reviews
           </button>
         </div>
@@ -587,7 +698,6 @@ export default function Reviews() {
                   <div className="mamta-admin-review-avatar">
                     {(review.name || "C").charAt(0).toUpperCase()}
                   </div>
-
                   <div>
                     <h3>{review.name || "Customer"}</h3>
                     <p>
@@ -638,7 +748,7 @@ export default function Reviews() {
                     type="button"
                     className="mamta-admin-action-edit"
                     onClick={() => openEdit(review)}
-                    aria-label={`Edit review by ${review.name}`}
+                    aria-label={`Edit review by ${review.name || "customer"}`}
                   >
                     <Pencil size={16} />
                     Edit
@@ -649,7 +759,7 @@ export default function Reviews() {
                     className="mamta-admin-action-delete"
                     onClick={() => handleDelete(review)}
                     disabled={deletingId === review._id}
-                    aria-label={`Delete review by ${review.name}`}
+                    aria-label={`Delete review by ${review.name || "customer"}`}
                   >
                     <Trash2 size={16} />
                     {deletingId === review._id ? "Deleting..." : "Delete"}

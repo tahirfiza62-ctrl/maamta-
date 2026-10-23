@@ -15,7 +15,7 @@ import "./Login.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
+"https://maamta.onrender.com/api";
 const RECAPTCHA_SITE_KEY =
   import.meta.env.VITE_RECAPTCHA_SITE_KEY ||
   "6LfRtPYtAAAAAJ3_2BhKNA9HbniWJJhJWb6HgE5B";

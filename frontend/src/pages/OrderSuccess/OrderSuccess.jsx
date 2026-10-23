@@ -17,9 +17,7 @@ import "./OrderSuccess.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
-
-const OrderSuccess = () => {
+  "https://maamta.onrender.com/api";const OrderSuccess = () => {
   const location = useLocation();
   const { id } = useParams();
 

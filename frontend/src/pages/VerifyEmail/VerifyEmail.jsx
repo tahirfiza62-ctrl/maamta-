@@ -13,9 +13,7 @@ import "./VerifyEmail.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com/api";
-
-const VerifyEmail = () => {
+  "https://maamta.onrender.com/api";const VerifyEmail = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
