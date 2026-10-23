@@ -145,7 +145,7 @@ const Account = () => {
       const token = localStorage.getItem("mamta_user_token");
 
       await axios.put(
-        `${API_URL}/admin/admin/auth/change-password`,
+        `${API_URL}/admin/auth/change-password`,
         {
           currentPassword: passwordData.currentPassword,
           newPassword: passwordData.newPassword,

@@ -254,7 +254,7 @@ const AdminCustomers = () => {
 
         const response =
           await axios.patch(
-            `${API_URL}/admin/admin/${customer._id}/status`,
+            `${API_URL}/admin/${customer._id}/status`,
             {
               active:
                 !customer.active,

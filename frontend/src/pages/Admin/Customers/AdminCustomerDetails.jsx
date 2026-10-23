@@ -65,7 +65,7 @@ const AdminCustomerDetails = () => {
       }
 
       const response = await axios.get(
-        `${API_URL}/admin/admin/${id}`,
+        `${API_URL}/admin/${id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -140,7 +140,7 @@ const AdminCustomerDetails = () => {
 
       try {
         const response = await axios.get(
-          `${API_URL}/admin/admin/${id}`,
+          `${API_URL}/admin/${id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

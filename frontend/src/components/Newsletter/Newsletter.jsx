@@ -40,7 +40,7 @@ const API_URL =
 
     try {
       const response = await axios.post(
-        `${API_URL}/admin/admin/newsletter/subscribe`,
+        `${API_URL}/admin/newsletter/subscribe`,
         {
           email: cleanEmail,
         }
