@@ -19,7 +19,8 @@ import "./AdminDashboard.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const AdminDashboard = () => {
+  "https://maamta.onrender.com/api";
+  const AdminDashboard = () => {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -35,7 +36,7 @@ const API_URL =
 
       const token = localStorage.getItem("mamta_admin_token");
 
-      const response = await axios.get(API_URL, {
+      const response = await axios.get(`${API_URL}/admin/dashboard`, {
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -85,7 +86,7 @@ const API_URL =
 
         const token = localStorage.getItem("mamta_admin_token");
 
-        const response = await axios.get(API_URL, {
+        const response = await axios.get(`${API_URL}/admin/dashboard`, {
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
@@ -148,7 +149,7 @@ const API_URL =
 
         const token = localStorage.getItem("mamta_admin_token");
 
-        const response = await axios.get(API_URL, {
+        const response = await axios.get(`${API_URL}/admin/dashboard`, {
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
