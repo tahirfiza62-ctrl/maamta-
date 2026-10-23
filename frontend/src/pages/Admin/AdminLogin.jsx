@@ -18,13 +18,13 @@ import "./AdminLogin.css";
 
 
 const ADMIN_LOGIN_URL =
-  "https://mamta-app-8.onrender.com/api/auth/admin";
+  "https://maamta.onrender.com/api/auth/admin";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
 
   /* =========================================================
-     FORM
+     FORM/
   ========================================================= */
 
   const [formData, setFormData] = useState({
