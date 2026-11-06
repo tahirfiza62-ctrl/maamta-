@@ -24,42 +24,59 @@ const API_URL = (
   "https://maamta.onrender.com/api"
 ).replace(/\/+$/, "");
 
-const WISHLIST_KEY = "mamta_wishlist";
 const GUEST_CART_KEY = "mamta_guest_cart";
 
 const PLACEHOLDER_IMAGE =
   "https://placehold.co/700x700/F4D9DC/4A3032?text=MAMTA";
 
 /* =========================================================
-   HELPERS
+   USER + WISHLIST HELPERS
 ========================================================= */
 
-// Get products from different possible API response formats
+const getCurrentUser = () => {
+  try {
+    const token = localStorage.getItem("mamta_user_token");
+
+    if (!token) return null;
+
+    const storedUser =
+      localStorage.getItem("mamta_user") ||
+      localStorage.getItem("mamta_user_data") ||
+      localStorage.getItem("currentUser");
+
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error("USER READ ERROR:", error);
+    return null;
+  }
+};
+
+const getWishlistKey = (user) => {
+  if (!user) return null;
+
+  const userId = user._id || user.id || user.email;
+
+  if (!userId) return null;
+
+  return `mamta_wishlist_${encodeURIComponent(
+    String(userId).trim().toLowerCase()
+  )}`;
+};
+
+/* =========================================================
+   PRODUCT HELPERS
+========================================================= */
+
 const extractProducts = (data) => {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.products)) {
-    return data.products;
-  }
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
-  if (Array.isArray(data?.data?.products)) {
-    return data.data.products;
-  }
-
-  if (Array.isArray(data?.data?.data)) {
-    return data.data.data;
-  }
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.products)) return data.products;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.products)) return data.data.products;
+  if (Array.isArray(data?.data?.data)) return data.data.data;
 
   return [];
 };
 
-// Get product category
 const getProductCategory = (product) => {
   if (typeof product?.category === "object") {
     return (
@@ -73,7 +90,6 @@ const getProductCategory = (product) => {
   return product?.category || "";
 };
 
-// Get product image
 const getProductImage = (product) => {
   if (typeof product?.image === "string" && product.image.trim()) {
     return product.image;
@@ -97,12 +113,11 @@ const getProductImage = (product) => {
 const MaternityPillows = () => {
   const navigate = useNavigate();
 
-  /* =======================================================
-     STATES
-  ======================================================== */
-
   const [maternityProducts, setMaternityProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
+  const [wishlistKey, setWishlistKey] = useState(() =>
+    getWishlistKey(getCurrentUser())
+  );
   const [addingProductId, setAddingProductId] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -116,12 +131,7 @@ const MaternityPillows = () => {
         setLoading(true);
 
         const response = await axios.get(`${API_URL}/products`);
-
-        console.log("MATERNITY API RESPONSE:", response.data);
-
         const products = extractProducts(response.data);
-
-        console.log("ALL PRODUCTS:", products);
 
         const filteredProducts = products.filter((product) => {
           const category = getProductCategory(product).toLowerCase();
@@ -131,8 +141,6 @@ const MaternityPillows = () => {
             product.active !== false
           );
         });
-
-        console.log("MATERNITY PRODUCTS:", filteredProducts);
 
         setMaternityProducts(filteredProducts);
       } catch (error) {
@@ -154,14 +162,24 @@ const MaternityPillows = () => {
   }, []);
 
   /* =======================================================
-     LOAD WISHLIST
+     LOAD ACCOUNT-SPECIFIC WISHLIST
   ======================================================== */
 
   useEffect(() => {
-    const loadWishlist = () => {
+    const refreshWishlist = () => {
+      const user = getCurrentUser();
+      const key = getWishlistKey(user);
+
+      setWishlistKey(key);
+
+      if (!key) {
+        setWishlist([]);
+        return;
+      }
+
       try {
         const savedWishlist = JSON.parse(
-          localStorage.getItem(WISHLIST_KEY) || "[]"
+          localStorage.getItem(key) || "[]"
         );
 
         setWishlist(
@@ -173,14 +191,18 @@ const MaternityPillows = () => {
       }
     };
 
-    loadWishlist();
+    refreshWishlist();
 
-    window.addEventListener("wishlistUpdated", loadWishlist);
-    window.addEventListener("storage", loadWishlist);
+    window.addEventListener("wishlistUpdated", refreshWishlist);
+    window.addEventListener("authChanged", refreshWishlist);
+    window.addEventListener("authUpdated", refreshWishlist);
+    window.addEventListener("storage", refreshWishlist);
 
     return () => {
-      window.removeEventListener("wishlistUpdated", loadWishlist);
-      window.removeEventListener("storage", loadWishlist);
+      window.removeEventListener("wishlistUpdated", refreshWishlist);
+      window.removeEventListener("authChanged", refreshWishlist);
+      window.removeEventListener("authUpdated", refreshWishlist);
+      window.removeEventListener("storage", refreshWishlist);
     };
   }, []);
 
@@ -204,7 +226,7 @@ const MaternityPillows = () => {
   };
 
   /* =======================================================
-     TOGGLE WISHLIST
+     TOGGLE ACCOUNT WISHLIST
   ======================================================== */
 
   const toggleWishlist = (product) => {
@@ -215,9 +237,18 @@ const MaternityPillows = () => {
       return;
     }
 
+    const user = getCurrentUser();
+    const key = getWishlistKey(user);
+
+    if (!key) {
+      toast.error("Please sign in to save products to your wishlist.");
+      navigate("/login");
+      return;
+    }
+
     try {
       const savedWishlist = JSON.parse(
-        localStorage.getItem(WISHLIST_KEY) || "[]"
+        localStorage.getItem(key) || "[]"
       );
 
       const currentWishlist = Array.isArray(savedWishlist)
@@ -245,11 +276,9 @@ const MaternityPillows = () => {
         toast.success(`${product.name} added to wishlist.`);
       }
 
-      localStorage.setItem(
-        WISHLIST_KEY,
-        JSON.stringify(updatedWishlist)
-      );
+      localStorage.setItem(key, JSON.stringify(updatedWishlist));
 
+      setWishlistKey(key);
       setWishlist(updatedWishlist);
 
       window.dispatchEvent(new Event("wishlistUpdated"));
@@ -264,9 +293,7 @@ const MaternityPillows = () => {
   ======================================================== */
 
   const animateToCart = (buttonElement) => {
-    if (!buttonElement) {
-      return;
-    }
+    if (!buttonElement) return;
 
     const cartTarget = document.querySelector(
       '[data-cart-target="true"]'
@@ -303,7 +330,6 @@ const MaternityPillows = () => {
 
     flyingItem.className = "mamta-flying-cart-item";
     flyingItem.innerHTML = "<span>M</span>";
-
     flyingItem.style.left = `${startX}px`;
     flyingItem.style.top = `${startY}px`;
 
@@ -316,35 +342,19 @@ const MaternityPillows = () => {
           opacity: 1,
         },
         {
-          transform: `translate3d(
-            ${deltaX * 0.18}px,
-            ${deltaY * 0.18 - 45}px,
-            0
-          ) scale(0.96)`,
+          transform: `translate3d(${deltaX * 0.18}px, ${deltaY * 0.18 - 45}px, 0) scale(0.96)`,
           opacity: 1,
         },
         {
-          transform: `translate3d(
-            ${deltaX * 0.48}px,
-            ${deltaY * 0.48 - 55}px,
-            0
-          ) scale(0.82)`,
+          transform: `translate3d(${deltaX * 0.48}px, ${deltaY * 0.48 - 55}px, 0) scale(0.82)`,
           opacity: 0.95,
         },
         {
-          transform: `translate3d(
-            ${deltaX * 0.78}px,
-            ${deltaY * 0.78 - 25}px,
-            0
-          ) scale(0.6)`,
+          transform: `translate3d(${deltaX * 0.78}px, ${deltaY * 0.78 - 25}px, 0) scale(0.6)`,
           opacity: 0.65,
         },
         {
-          transform: `translate3d(
-            ${deltaX}px,
-            ${deltaY}px,
-            0
-          ) scale(0.25)`,
+          transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(0.25)`,
           opacity: 0,
         },
       ],
@@ -359,9 +369,7 @@ const MaternityPillows = () => {
       flyingItem.remove();
 
       cartTarget.classList.remove("cart-flying-pop");
-
       void cartTarget.offsetWidth;
-
       cartTarget.classList.add("cart-flying-pop");
 
       setTimeout(() => {
@@ -379,10 +387,8 @@ const MaternityPillows = () => {
 
     try {
       const savedCart = localStorage.getItem(GUEST_CART_KEY);
-
       guestCart = savedCart ? JSON.parse(savedCart) : [];
 
-      // Support older guest cart object format
       if (!Array.isArray(guestCart)) {
         guestCart = Array.isArray(guestCart?.items)
           ? guestCart.items
@@ -408,14 +414,11 @@ const MaternityPillows = () => {
       guestCart.push(cartData);
     }
 
-    localStorage.setItem(
-      GUEST_CART_KEY,
-      JSON.stringify(guestCart)
-    );
+    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(guestCart));
   };
 
   /* =======================================================
-     ADD TO CART — GUEST + LOGGED-IN USERS
+     ADD TO CART
   ======================================================== */
 
   const addToCart = async (product, buttonElement) => {
@@ -426,9 +429,7 @@ const MaternityPillows = () => {
       return;
     }
 
-    if (String(addingProductId) === String(productId)) {
-      return;
-    }
+    if (String(addingProductId) === String(productId)) return;
 
     const cartData = {
       productId: String(productId),
@@ -448,15 +449,11 @@ const MaternityPillows = () => {
 
       if (token) {
         try {
-          await axios.post(
-            `${API_URL}/cart/add`,
-            cartData,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+          await axios.post(`${API_URL}/cart/add`, cartData, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
         } catch (error) {
           if (
             error.response?.status !== 401 &&
@@ -466,18 +463,20 @@ const MaternityPillows = () => {
           }
 
           localStorage.removeItem("mamta_user_token");
+          localStorage.removeItem("mamta_user_token");
           localStorage.removeItem("mamta_user");
-
-          addToGuestCart(cartData);
+          localStorage.removeItem("mamta_token");
+          localStorage.removeItem("mamta_user_data");
 
           window.dispatchEvent(new Event("authChanged"));
+
+          addToGuestCart(cartData);
         }
       } else {
         addToGuestCart(cartData);
       }
 
       window.dispatchEvent(new Event("cartChanged"));
-
       animateToCart(buttonElement);
 
       toast.success(`${product.name} added to cart.`);
@@ -499,20 +498,14 @@ const MaternityPillows = () => {
 
   return (
     <main className="maternity-page">
-
       {/* HERO */}
-
       <section className="maternity-hero">
         <div className="maternity-hero-glow maternity-glow-one"></div>
         <div className="maternity-hero-glow maternity-glow-two"></div>
 
         <div className="maternity-hero-inner">
-
-          {/* HERO CONTENT */}
-
           <ScrollReveal direction="left">
             <div className="maternity-hero-content">
-
               <span className="maternity-eyebrow">
                 <span></span>
                 MAAMTA MATERNITY COLLECTION
@@ -544,15 +537,11 @@ const MaternityPillows = () => {
                   Soft support • Thoughtful comfort
                 </span>
               </div>
-
             </div>
           </ScrollReveal>
 
-          {/* HERO VISUAL */}
-
           <ScrollReveal direction="right">
             <div className="maternity-hero-visual">
-
               <div className="maternity-hero-circle"></div>
 
               <div className="maternity-main-image">
@@ -581,21 +570,15 @@ const MaternityPillows = () => {
               <div className="maternity-round-badge">
                 <span>COMFORT • CARE • MAAMTA •</span>
               </div>
-
             </div>
           </ScrollReveal>
-
         </div>
       </section>
 
       {/* INTRO */}
-
       <ScrollReveal direction="down">
         <section className="maternity-intro">
-
-          <div className="maternity-intro-label">
-            WHY MAAMTA
-          </div>
+          <div className="maternity-intro-label">WHY MAAMTA</div>
 
           <h2>
             Comfort that feels
@@ -610,19 +593,14 @@ const MaternityPillows = () => {
             selected to offer soft, supportive comfort
             throughout your day and night.
           </p>
-
         </section>
       </ScrollReveal>
 
       {/* BENEFITS */}
-
       <section className="maternity-benefits">
-
         <ScrollReveal direction="left">
           <div className="maternity-benefit">
-
             <div className="benefit-number">01</div>
-
             <div>
               <h3>Gentle Support</h3>
               <p>
@@ -630,15 +608,12 @@ const MaternityPillows = () => {
                 in mind for relaxing moments.
               </p>
             </div>
-
           </div>
         </ScrollReveal>
 
         <ScrollReveal direction="up" className="stagger-2">
           <div className="maternity-benefit">
-
             <div className="benefit-number">02</div>
-
             <div>
               <h3>Soft Materials</h3>
               <p>
@@ -646,15 +621,12 @@ const MaternityPillows = () => {
                 feeling whenever you need to rest.
               </p>
             </div>
-
           </div>
         </ScrollReveal>
 
         <ScrollReveal direction="right" className="stagger-3">
           <div className="maternity-benefit">
-
             <div className="benefit-number">03</div>
-
             <div>
               <h3>Made for Motherhood</h3>
               <p>
@@ -662,22 +634,17 @@ const MaternityPillows = () => {
                 of expecting mothers in mind.
               </p>
             </div>
-
           </div>
         </ScrollReveal>
-
       </section>
 
       {/* PRODUCTS */}
-
       <section
         className="maternity-products-section"
         id="maternity-products"
       >
-
         <ScrollReveal direction="down">
           <div className="maternity-section-heading">
-
             <div>
               <span className="maternity-section-eyebrow">
                 THE COLLECTION
@@ -692,14 +659,10 @@ const MaternityPillows = () => {
               Find the gentle support that
               feels right for you.
             </p>
-
           </div>
         </ScrollReveal>
 
-        {/* PRODUCT GRID */}
-
         <div className="maternity-products-grid">
-
           {loading ? (
             <div className="no-products">
               <h3>Loading maternity collection...</h3>
@@ -708,7 +671,6 @@ const MaternityPillows = () => {
           ) : maternityProducts.length > 0 ? (
             maternityProducts.map((product, index) => {
               const productId = product._id || product.id;
-
               const productInWishlist =
                 isProductInWishlist(productId);
 
@@ -719,11 +681,7 @@ const MaternityPillows = () => {
                   className={`stagger-${(index % 6) + 1}`}
                 >
                   <article className="maternity-product-card">
-
-                    {/* PRODUCT IMAGE */}
-
                     <div className="maternity-product-image">
-
                       <img
                         src={getProductImage(product)}
                         alt={product.name || "Maternity Pillow"}
@@ -733,15 +691,11 @@ const MaternityPillows = () => {
                         }}
                       />
 
-                      {/* PRODUCT TAG */}
-
                       {product.tag && (
                         <span className="maternity-product-tag">
                           {product.tag}
                         </span>
                       )}
-
-                      {/* WISHLIST */}
 
                       <button
                         type="button"
@@ -765,12 +719,7 @@ const MaternityPillows = () => {
                         />
                       </button>
 
-                      {/* PRODUCT OVERLAY */}
-
                       <div className="maternity-product-overlay">
-
-                        {/* VIEW DETAILS */}
-
                         <button
                           type="button"
                           className="maternity-details-button"
@@ -781,8 +730,6 @@ const MaternityPillows = () => {
                           View Details
                           <ArrowUpRight size={15} />
                         </button>
-
-                        {/* ADD TO CART */}
 
                         <button
                           type="button"
@@ -796,35 +743,21 @@ const MaternityPillows = () => {
                           }
                         >
                           <ShoppingBag size={16} />
-
                           {String(addingProductId) ===
                           String(productId)
                             ? "Adding..."
                             : "Add to cart"}
                         </button>
-
                       </div>
                     </div>
 
-                    {/* PRODUCT INFO */}
-
                     <div className="maternity-product-info">
-
-                      {/* RATING */}
-
                       <div className="maternity-rating">
                         <Star size={13} fill="currentColor" />
-
-                        <span>
-                          {product.rating || "4.9"}
-                        </span>
+                        <span>{product.rating || "4.9"}</span>
                       </div>
 
-                      {/* NAME */}
-
                       <h3>{product.name}</h3>
-
-                      {/* PRICE */}
 
                       <div className="maternity-price">
                         <strong>
@@ -837,9 +770,7 @@ const MaternityPillows = () => {
                           </span>
                         )}
                       </div>
-
                     </div>
-
                   </article>
                 </ScrollReveal>
               );
@@ -852,18 +783,13 @@ const MaternityPillows = () => {
               </p>
             </div>
           )}
-
         </div>
-
       </section>
 
       {/* CLOSING BANNER */}
-
       <ScrollReveal direction="up">
         <section className="maternity-closing">
-
           <div className="maternity-closing-inner">
-
             <span>FOR EVERY MOTHER</span>
 
             <h2>
@@ -876,12 +802,9 @@ const MaternityPillows = () => {
               Explore maternity pillows
               <ArrowUpRight size={16} />
             </a>
-
           </div>
-
         </section>
       </ScrollReveal>
-
     </main>
   );
 };
