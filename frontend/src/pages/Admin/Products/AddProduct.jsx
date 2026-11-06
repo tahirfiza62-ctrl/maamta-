@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   ArrowLeft,
@@ -11,7 +10,23 @@ import {
 import { useNavigate } from "react-router-dom";
 import "./AddProduct.css";
 
-const API_URL = "https://mamta-app-8.onrender.com/api/admin/products";
+/* =========================================================
+   API CONFIG
+   Same base URL as AdminProducts so both pages always talk
+   to the same server.
+   Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
+   CRA:   use process.env.REACT_APP_API_URL instead.
+========================================================= */
+
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
+
+const PRODUCTS_URL = `${API_BASE}/admin/products`;
+
+const TOKEN_KEY = "mamta_admin_token";
+const USER_KEY = "mamta_admin_user";
+
+const MAX_EXTRA_IMAGES = 4;
 
 /* =========================================================
    ALLOWED CATEGORIES
@@ -90,7 +105,7 @@ const AVAILABLE_COLORS = [
 ];
 
 /* =========================================================
-   CREATE COLOR OBJECT
+   HELPERS
 ========================================================= */
 
 const createColorObject = (color) => ({
@@ -101,12 +116,31 @@ const createColorObject = (color) => ({
   useMainImage: true,
 });
 
+const isValidUrl = (value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/* Preview images: hide on error, show again when a new URL loads */
+const hideOnError = (e) => {
+  e.currentTarget.style.display = "none";
+};
+
+const showOnLoad = (e) => {
+  e.currentTarget.style.display = "";
+};
+
 /* =========================================================
    ADD PRODUCT
 ========================================================= */
 
 const AddProduct = () => {
   const navigate = useNavigate();
+  const redirectTimer = useRef(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -129,37 +163,37 @@ const AddProduct = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  /* Clear the redirect timer if the page is left early */
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current);
+      }
+    };
+  }, []);
+
   /* =========================================================
      HANDLE INPUT CHANGE
   ========================================================= */
 
   const handleChange = (e) => {
-    const {
-      name,
-      value,
-      type,
-      checked,
-    } = e.target;
+    const { name, value, type, checked } = e.target;
 
     setForm((prev) => ({
       ...prev,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
   /* =========================================================
-     TOGGLE COLOR
+     COLORS
   ========================================================= */
 
   const toggleColor = (color) => {
     setForm((prev) => {
-      const alreadySelected =
-        prev.colors.some(
-          (item) => item.value === color.value
-        );
+      const alreadySelected = prev.colors.some(
+        (item) => item.value === color.value
+      );
 
       if (alreadySelected) {
         return {
@@ -172,66 +206,42 @@ const AddProduct = () => {
 
       return {
         ...prev,
-        colors: [
-          ...prev.colors,
-          createColorObject(color),
-        ],
+        colors: [...prev.colors, createColorObject(color)],
       };
     });
   };
-
-  /* =========================================================
-     TOGGLE USE MAIN IMAGE
-  ========================================================= */
 
   const toggleUseMainImage = (colorValue) => {
     setForm((prev) => ({
       ...prev,
       colors: prev.colors.map((color) =>
         color.value === colorValue
-          ? {
-              ...color,
-              useMainImage: !color.useMainImage,
-            }
+          ? { ...color, useMainImage: !color.useMainImage }
           : color
       ),
     }));
   };
-
-  /* =========================================================
-     UPDATE COLOR IMAGE
-  ========================================================= */
 
   const updateColorImage = (colorValue, imageValue) => {
     setForm((prev) => ({
       ...prev,
       colors: prev.colors.map((color) =>
         color.value === colorValue
-          ? {
-              ...color,
-              image: imageValue,
-              useMainImage: false,
-            }
+          ? { ...color, image: imageValue, useMainImage: false }
           : color
       ),
     }));
   };
 
-  /* =========================================================
-     REMOVE COLOR
-  ========================================================= */
-
   const removeColor = (colorValue) => {
     setForm((prev) => ({
       ...prev,
-      colors: prev.colors.filter(
-        (color) => color.value !== colorValue
-      ),
+      colors: prev.colors.filter((color) => color.value !== colorValue),
     }));
   };
 
   /* =========================================================
-     ADD FEATURE
+     FEATURES
   ========================================================= */
 
   const addFeature = () => {
@@ -255,10 +265,6 @@ const AddProduct = () => {
     setError("");
   };
 
-  /* =========================================================
-     REMOVE FEATURE
-  ========================================================= */
-
   const removeFeature = (index) => {
     setForm((prev) => ({
       ...prev,
@@ -267,7 +273,7 @@ const AddProduct = () => {
   };
 
   /* =========================================================
-     ADD ADDITIONAL IMAGE
+     ADDITIONAL IMAGES
   ========================================================= */
 
   const addImage = () => {
@@ -278,8 +284,15 @@ const AddProduct = () => {
       return;
     }
 
-    if (form.images.length >= 4) {
-      setError("You can add up to 4 additional images.");
+    if (!isValidUrl(value)) {
+      setError("Image URL must start with http:// or https://");
+      return;
+    }
+
+    if (form.images.length >= MAX_EXTRA_IMAGES) {
+      setError(
+        `You can add up to ${MAX_EXTRA_IMAGES} additional images.`
+      );
       return;
     }
 
@@ -297,15 +310,78 @@ const AddProduct = () => {
     setError("");
   };
 
-  /* =========================================================
-     REMOVE IMAGE
-  ========================================================= */
-
   const removeImage = (index) => {
     setForm((prev) => ({
       ...prev,
       images: prev.images.filter((_, i) => i !== index),
     }));
+  };
+
+  /* =========================================================
+     VALIDATION
+     Returns an error message, or "" when the form is valid.
+  ========================================================= */
+
+  const validateForm = () => {
+    if (!form.name.trim()) {
+      return "Product name is required.";
+    }
+
+    if (!ALLOWED_CATEGORIES.includes(form.category.trim())) {
+      return "Please select a valid product category.";
+    }
+
+    if (
+      form.price === "" ||
+      !Number.isFinite(Number(form.price)) ||
+      Number(form.price) < 0
+    ) {
+      return "Enter a valid price.";
+    }
+
+    if (form.oldPrice !== "") {
+      if (
+        !Number.isFinite(Number(form.oldPrice)) ||
+        Number(form.oldPrice) < 0
+      ) {
+        return "Old price must be a valid number.";
+      }
+
+      if (Number(form.oldPrice) <= Number(form.price)) {
+        return "Old price should be higher than the current price.";
+      }
+    }
+
+    if (
+      form.stock !== "" &&
+      (!Number.isFinite(Number(form.stock)) || Number(form.stock) < 0)
+    ) {
+      return "Stock must be a valid number (0 or more).";
+    }
+
+    if (form.image.trim() && !isValidUrl(form.image.trim())) {
+      return "Main image URL must start with http:// or https://";
+    }
+
+    for (const color of form.colors) {
+      if (color.useMainImage) {
+        if (!form.image.trim()) {
+          return `Please add a main product image for ${color.name}.`;
+        }
+      } else {
+        const colorImage = (color.image || "").trim();
+
+        if (!colorImage) {
+          return `Please add an image for ${color.name}.`;
+        }
+
+        if (!isValidUrl(colorImage)) {
+          return `The image URL for ${color.name} must start with http:// or https://`;
+        }
+      }
+    }
+
+    return "";
   };
 
   /* =========================================================
@@ -315,155 +391,62 @@ const AddProduct = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (loading) {
+      return;
+    }
+
     setError("");
     setSuccess("");
 
-    /* -----------------------------------------
-       PRODUCT NAME
-    ----------------------------------------- */
+    const validationError = validateForm();
 
-    if (!form.name.trim()) {
-      setError("Product name is required.");
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    /* -----------------------------------------
-       CATEGORY
-    ----------------------------------------- */
-
-    const normalizedCategory = form.category.trim();
-
-    if (!ALLOWED_CATEGORIES.includes(normalizedCategory)) {
-      setError("Please select a valid product category.");
-      return;
-    }
-
-    /* -----------------------------------------
-       PRICE
-    ----------------------------------------- */
-
-    if (
-      form.price === "" ||
-      !Number.isFinite(Number(form.price)) ||
-      Number(form.price) < 0
-    ) {
-      setError("Enter a valid price.");
-      return;
-    }
-
-    /* -----------------------------------------
-       OLD PRICE
-    ----------------------------------------- */
-
-    if (
-      form.oldPrice !== "" &&
-      (!Number.isFinite(Number(form.oldPrice)) ||
-        Number(form.oldPrice) < 0)
-    ) {
-      setError("Old price cannot be negative.");
-      return;
-    }
-
-    /* -----------------------------------------
-       STOCK
-    ----------------------------------------- */
-
-    if (
-      form.stock !== "" &&
-      (!Number.isFinite(Number(form.stock)) ||
-        Number(form.stock) < 0)
-    ) {
-      setError("Stock cannot be negative.");
-      return;
-    }
-
-    /* -----------------------------------------
-       MAIN IMAGE VALIDATION
-    ----------------------------------------- */
-
-    for (const color of form.colors) {
-      if (color.useMainImage && !form.image.trim()) {
-        setError(
-          `Please add a main product image for ${color.name}.`
-        );
-        return;
-      }
-    }
-
-    /* -----------------------------------------
-       COLOR IMAGE VALIDATION
-    ----------------------------------------- */
-
-    for (const color of form.colors) {
-      if (
-        !color.useMainImage &&
-        (!color.image || !color.image.trim())
-      ) {
-        setError(`Please add an image for ${color.name}.`);
-        return;
-      }
-    }
-
-    const token = localStorage.getItem("mamta_admin_token");
+    const token = localStorage.getItem(TOKEN_KEY);
 
     if (!token) {
-      setError("Your admin session has expired. Please log in again.");
+      navigate("/admin");
       return;
     }
 
     try {
       setLoading(true);
 
-      /* -----------------------------------------
-         CLEAN COLORS
-      ----------------------------------------- */
+      const mainImage = form.image.trim();
+
+      /* Colors: resolve "use main image" into a real URL.
+         useMainImage is UI-only and is not sent to the server. */
 
       const cleanedColors = form.colors.map((color) => ({
         name: color.name,
         value: color.value,
         code: color.code,
-        image: color.useMainImage
-          ? form.image.trim()
-          : color.image.trim(),
+        image: color.useMainImage ? mainImage : color.image.trim(),
       }));
-
-      /* -----------------------------------------
-         CLEAN ADDITIONAL IMAGES
-      ----------------------------------------- */
 
       const cleanedImages = [
         ...new Set(
           form.images
             .map((image) =>
-              typeof image === "string"
-                ? image.trim()
-                : ""
+              typeof image === "string" ? image.trim() : ""
             )
             .filter(Boolean)
         ),
-      ].slice(0, 4);
-
-      /* -----------------------------------------
-         PRODUCT DATA
-
-         IMPORTANT:
-         Do not convert the selected category
-         to Nursing Products or Accessories.
-      ----------------------------------------- */
+      ].slice(0, MAX_EXTRA_IMAGES);
 
       const productData = {
         name: form.name.trim(),
         description: form.description.trim(),
         price: Number(form.price),
-        oldPrice:
-          form.oldPrice === ""
-            ? null
-            : Number(form.oldPrice),
+        oldPrice: form.oldPrice === "" ? null : Number(form.oldPrice),
 
-        // Save the exact category selected in the dropdown.
-        category: normalizedCategory,
+        /* Exact category selected in the dropdown */
+        category: form.category.trim(),
 
-        image: form.image.trim(),
+        image: mainImage,
         images: cleanedImages,
         stock: form.stock === "" ? 0 : Number(form.stock),
         active: form.active,
@@ -471,14 +454,7 @@ const AddProduct = () => {
         colors: cleanedColors,
       };
 
-      console.log("ADDING PRODUCT:", productData);
-      console.log("PRODUCT CATEGORY:", productData.category);
-
-      /* -----------------------------------------
-         API REQUEST
-      ----------------------------------------- */
-
-      await axios.post(API_URL, productData, {
+      await axios.post(PRODUCTS_URL, productData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -486,16 +462,28 @@ const AddProduct = () => {
 
       setSuccess("Product added successfully.");
 
-      setTimeout(() => {
+      redirectTimer.current = setTimeout(() => {
         navigate("/admin/products");
       }, 800);
     } catch (err) {
       console.error("ADD PRODUCT ERROR:", err);
 
-      setError(
-        err.response?.data?.message ||
-          "Unable to add product."
-      );
+      const status = err.response?.status;
+
+      if (status === 401 || status === 403) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        navigate("/admin");
+        return;
+      }
+
+      if (err.request && !err.response) {
+        setError(
+          "Cannot reach the server. If it was idle, wait a minute and try again."
+        );
+      } else {
+        setError(err.response?.data?.message || "Unable to add product.");
+      }
     } finally {
       setLoading(false);
     }
@@ -504,6 +492,8 @@ const AddProduct = () => {
   /* =========================================================
      JSX
   ========================================================= */
+
+  const imagesFull = form.images.length >= MAX_EXTRA_IMAGES;
 
   return (
     <section className="admin-add-product-page">
@@ -518,9 +508,7 @@ const AddProduct = () => {
         </button>
 
         <div>
-          <p className="admin-page-label">
-            PRODUCT MANAGEMENT
-          </p>
+          <p className="admin-page-label">PRODUCT MANAGEMENT</p>
 
           <h1>Add New Product</h1>
 
@@ -531,45 +519,45 @@ const AddProduct = () => {
       </div>
 
       {error && (
-        <div className="admin-product-alert admin-product-error">
+        <div
+          className="admin-product-alert admin-product-error"
+          role="alert"
+        >
           {error}
         </div>
       )}
 
       {success && (
-        <div className="admin-product-alert admin-product-success">
+        <div
+          className="admin-product-alert admin-product-success"
+          role="status"
+        >
           <Check size={18} />
           {success}
         </div>
       )}
 
-      <form
-        className="admin-add-product-form"
-        onSubmit={handleSubmit}
-      >
+      <form className="admin-add-product-form" onSubmit={handleSubmit}>
         {/* BASIC INFORMATION */}
 
         <div className="admin-product-card">
           <div className="admin-card-heading">
             <div>
-              <span className="admin-card-eyebrow">
-                BASIC INFORMATION
-              </span>
+              <span className="admin-card-eyebrow">BASIC INFORMATION</span>
 
               <h2>Product Details</h2>
 
-              <p>
-                Enter the main information about your product.
-              </p>
+              <p>Enter the main information about your product.</p>
             </div>
           </div>
 
           <div className="admin-form-group">
-            <label>
+            <label htmlFor="product-name">
               Product Name <span>*</span>
             </label>
 
             <input
+              id="product-name"
               type="text"
               name="name"
               value={form.name}
@@ -580,9 +568,10 @@ const AddProduct = () => {
           </div>
 
           <div className="admin-form-group">
-            <label>Description</label>
+            <label htmlFor="product-description">Description</label>
 
             <textarea
+              id="product-description"
               name="description"
               value={form.description}
               onChange={handleChange}
@@ -593,31 +582,35 @@ const AddProduct = () => {
 
           <div className="admin-form-grid">
             <div className="admin-form-group">
-              <label>
+              <label htmlFor="product-price">
                 Price <span>*</span>
               </label>
 
               <input
+                id="product-price"
                 type="number"
                 name="price"
                 value={form.price}
                 onChange={handleChange}
                 placeholder="0"
                 min="0"
+                step="any"
                 required
               />
             </div>
 
             <div className="admin-form-group">
-              <label>Old Price</label>
+              <label htmlFor="product-old-price">Old Price</label>
 
               <input
+                id="product-old-price"
                 type="number"
                 name="oldPrice"
                 value={form.oldPrice}
                 onChange={handleChange}
                 placeholder="Optional"
                 min="0"
+                step="any"
               />
             </div>
           </div>
@@ -625,11 +618,12 @@ const AddProduct = () => {
           {/* CATEGORY DROPDOWN */}
 
           <div className="admin-form-group">
-            <label>
+            <label htmlFor="product-category">
               Category <span>*</span>
             </label>
 
             <select
+              id="product-category"
               name="category"
               value={form.category}
               onChange={handleChange}
@@ -646,15 +640,17 @@ const AddProduct = () => {
           </div>
 
           <div className="admin-form-group">
-            <label>Stock</label>
+            <label htmlFor="product-stock">Stock</label>
 
             <input
+              id="product-stock"
               type="number"
               name="stock"
               value={form.stock}
               onChange={handleChange}
               placeholder="0"
               min="0"
+              step="1"
             />
           </div>
 
@@ -681,22 +677,19 @@ const AddProduct = () => {
         <div className="admin-product-card">
           <div className="admin-card-heading">
             <div>
-              <span className="admin-card-eyebrow">
-                PRODUCT IMAGE
-              </span>
+              <span className="admin-card-eyebrow">PRODUCT IMAGE</span>
 
               <h2>Main Product Image</h2>
 
-              <p>
-                Add the primary image for this product.
-              </p>
+              <p>Add the primary image for this product.</p>
             </div>
           </div>
 
           <div className="admin-form-group">
-            <label>Main Image URL</label>
+            <label htmlFor="product-main-image">Main Image URL</label>
 
             <input
+              id="product-main-image"
               type="text"
               name="image"
               value={form.image}
@@ -710,9 +703,8 @@ const AddProduct = () => {
               <img
                 src={form.image}
                 alt={form.name || "Product"}
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
+                onError={hideOnError}
+                onLoad={showOnLoad}
               />
             </div>
           )}
@@ -723,21 +715,19 @@ const AddProduct = () => {
         <div className="admin-product-card">
           <div className="admin-card-heading">
             <div>
-              <span className="admin-card-eyebrow">
-                PRODUCT GALLERY
-              </span>
+              <span className="admin-card-eyebrow">PRODUCT GALLERY</span>
 
               <h2>Additional Images</h2>
 
               <p>
-                Add up to 4 additional images. These images
-                become the automatic product gallery on
+                Add up to {MAX_EXTRA_IMAGES} additional images. These
+                images become the automatic product gallery on
                 ProductDetails.
               </p>
             </div>
 
             <div className="admin-selected-count">
-              {form.images.length} / 4
+              {form.images.length} / {MAX_EXTRA_IMAGES}
             </div>
           </div>
 
@@ -753,18 +743,19 @@ const AddProduct = () => {
                 }
               }}
               placeholder="Paste image URL"
-              disabled={form.images.length >= 4}
+              aria-label="Additional image URL"
+              disabled={imagesFull}
             />
 
             <button
               type="button"
               className="admin-add-small-button"
               onClick={addImage}
-              disabled={form.images.length >= 4}
+              disabled={imagesFull}
             >
               <Plus size={18} />
 
-              {form.images.length >= 4 ? "Maximum" : "Add"}
+              {imagesFull ? "Maximum" : "Add"}
             </button>
           </div>
 
@@ -779,9 +770,8 @@ const AddProduct = () => {
                     <img
                       src={image}
                       alt={`Product ${index + 1}`}
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
+                      onError={hideOnError}
+                      onLoad={showOnLoad}
                     />
                   </div>
 
@@ -809,15 +799,11 @@ const AddProduct = () => {
         <div className="admin-product-card">
           <div className="admin-card-heading">
             <div>
-              <span className="admin-card-eyebrow">
-                PRODUCT FEATURES
-              </span>
+              <span className="admin-card-eyebrow">PRODUCT FEATURES</span>
 
               <h2>Features</h2>
 
-              <p>
-                Add important features of this product.
-              </p>
+              <p>Add important features of this product.</p>
             </div>
           </div>
 
@@ -833,6 +819,7 @@ const AddProduct = () => {
                 }
               }}
               placeholder="e.g. Soft memory foam"
+              aria-label="Product feature"
             />
 
             <button
@@ -877,16 +864,13 @@ const AddProduct = () => {
         <div className="admin-product-card">
           <div className="admin-card-heading">
             <div>
-              <span className="admin-card-eyebrow">
-                PRODUCT COLORS
-              </span>
+              <span className="admin-card-eyebrow">PRODUCT COLORS</span>
 
               <h2>Available Colors</h2>
 
               <p>
-                Select the colors available for this product.
-                Use the main image or add a separate image
-                for each color.
+                Select the colors available for this product. Use the
+                main image or add a separate image for each color.
               </p>
             </div>
 
@@ -908,6 +892,7 @@ const AddProduct = () => {
                   className={`admin-color-option ${
                     selected ? "selected" : ""
                   }`}
+                  aria-pressed={selected}
                   onClick={() => toggleColor(color)}
                 >
                   <span
@@ -915,9 +900,7 @@ const AddProduct = () => {
                     style={{ backgroundColor: color.hex }}
                   />
 
-                  <span className="admin-color-name">
-                    {color.name}
-                  </span>
+                  <span className="admin-color-name">{color.name}</span>
 
                   {selected && (
                     <span className="admin-color-check">
@@ -974,15 +957,11 @@ const AddProduct = () => {
                       <input
                         type="checkbox"
                         checked={color.useMainImage}
-                        onChange={() =>
-                          toggleUseMainImage(color.value)
-                        }
+                        onChange={() => toggleUseMainImage(color.value)}
                       />
 
                       <span className="admin-custom-checkbox">
-                        {color.useMainImage && (
-                          <Check size={14} />
-                        )}
+                        {color.useMainImage && <Check size={14} />}
                       </span>
 
                       <span>Use Main Product Image</span>
@@ -994,12 +973,10 @@ const AddProduct = () => {
                           type="text"
                           value={color.image}
                           onChange={(e) =>
-                            updateColorImage(
-                              color.value,
-                              e.target.value
-                            )
+                            updateColorImage(color.value, e.target.value)
                           }
                           placeholder={`Paste ${color.name} product image URL`}
+                          aria-label={`${color.name} image URL`}
                         />
 
                         {color.image && (
@@ -1007,9 +984,8 @@ const AddProduct = () => {
                             <img
                               src={color.image}
                               alt={color.name}
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
+                              onError={hideOnError}
+                              onLoad={showOnLoad}
                             />
                           </div>
                         )}
@@ -1021,9 +997,8 @@ const AddProduct = () => {
                         <img
                           src={form.image}
                           alt={`${color.name} product`}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
+                          onError={hideOnError}
+                          onLoad={showOnLoad}
                         />
 
                         <span className="admin-main-image-used">
@@ -1036,8 +1011,8 @@ const AddProduct = () => {
                     {color.useMainImage && !form.image && (
                       <div className="admin-color-image-warning">
                         <ImagePlus size={16} />
-                        Add the main product image above to use it
-                        for this color.
+                        Add the main product image above to use it for
+                        this color.
                       </div>
                     )}
                   </div>
