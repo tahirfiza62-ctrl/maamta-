@@ -28,8 +28,12 @@ const sendVerificationEmail = async (email, name, code) => {
   const safeCode = escapeHtml(code);
 
   const mailOptions = {
-    from: "MAMTA <onboarding@resend.dev>",
-    to: [email],
+     from: process.env.RESEND_FROM_EMAIL,
+  replyTo: "maamtacircle@gmail.com",
+  to: [email],
+  subject: "Your MAMTA verification code",
+  html: `...`,
+  text: `Hi ${name}, your MAMTA verification code is ${code}. It expires in 24 hours.`,
 
     subject: "Your MAMTA verification code",
 

@@ -236,12 +236,13 @@ const sendOrderEmail = async (order) => {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: "MAMTA <onboarding@resend.dev>",
-        to: ["maamtacircle@gmail.com"],
-        subject: `New MAMTA Order - ${orderNumber}`,
-        html,
-      }),
+     body: JSON.stringify({
+  from: process.env.RESEND_FROM_EMAIL,
+  replyTo: "maamtacircle@gmail.com",
+  to: ["maamtacircle@gmail.com"],
+  subject: `New MAMTA Order - ${orderNumber}`,
+  html,
+}),
       signal: AbortSignal.timeout(15000),
     });
 
