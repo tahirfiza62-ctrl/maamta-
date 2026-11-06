@@ -13,9 +13,11 @@ import {
 
 import axios from "axios";
 import "./Register.css";
-const API_URL =
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const Register = () => {
+  "https://maamta.onrender.com/api"
+).replace(/\/+$/, "");
+const Register = () => {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -72,8 +74,7 @@ const API_URL =
     /* =======================================================
        EMAIL FORMAT
     ======================================================= */
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(email)) {
       setError("Please enter a valid email address.");
@@ -105,20 +106,19 @@ const API_URL =
          REGISTER CUSTOMER
       ===================================================== */
 
-      const response = await axios.post(
-        `${API_URL}/admin/auth/register`,
-        {
-          name,
-          email,
-          password,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
+const response = await axios.post(
+  `${API_URL}/auth/register`,
+  {
+    name,
+    email,
+    password,
+  },
+  {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  }
+);
       console.log("REGISTER SUCCESS:", response.data);
 
       /*
