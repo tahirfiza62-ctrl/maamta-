@@ -747,19 +747,11 @@ const Cart = () => {
 
           {/* SHIPPING */}
 
-          <div className="summary-line">
-            <span>Shipping</span>
-
-            <strong>
-              {shipping === 0
-                ? "Included"
-                : `Rs. ${shipping.toLocaleString()}`}
-            </strong>
-          </div>
+         
 
         <div className="summary-line">
   <span>Shipping</span>
-  <strong>Included</strong>
+  <strong>Free</strong>
 </div>
           <div className="summary-divider" />
 
