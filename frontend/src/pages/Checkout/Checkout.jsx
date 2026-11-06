@@ -319,9 +319,7 @@ const Checkout = () => {
   );
 
   const shipping =
-    subtotal >= 5000 || subtotal === 0
-      ? 0
-      : 250;
+    0
 
   const total = subtotal + shipping;
 
@@ -995,32 +993,37 @@ if (orderId) {
             </div>
           </div>
 
-          {subtotal > 0 && subtotal < 5000 && (
-            <div className="checkout-delivery-note">
-              <ShoppingBag size={20} />
+   <div>
+  <span>Shipping</span>
+  <strong>FREE</strong>
+</div>
+<div className="checkout-delivery-note">
+  <TruckIcon />
 
-              <div>
-                <strong>Shipping Offer</strong>
-
-                <span>
-                  Add Rs.{" "}
-                  {(5000 - subtotal).toLocaleString()} more
-                  to qualify for shipping at no extra cost.
-                </span>
-              </div>
-            </div>
-          )}
+  <div>
+    <strong>Free Shipping</strong>
+    <span>Delivery charges are covered by MAMTA.</span>
+  </div>
+</div>
 
           {/* DELIVERY TIME */}
+<div className="checkout-delivery-note">
+  <TruckIcon />
 
+  <div>
+    <strong>Free Shipping</strong>
+    <span>Delivery charges are covered by MAMTA.</span>
+  </div>
+</div>
           <div className="checkout-delivery-note">
-            <MapPin size={20} />
+  <MapPin size={20} />
 
-            <div>
-              <strong>Estimated Delivery</strong>
-              <span>3–4 working days</span>
-            </div>
-          </div>
+  <div>
+    <strong>Estimated Delivery</strong>
+    <span>3–4 working days</span>
+  </div>
+</div>
+
 
           {/* SECURE NOTE */}
 

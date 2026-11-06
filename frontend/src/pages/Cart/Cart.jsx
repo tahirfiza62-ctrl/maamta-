@@ -444,9 +444,7 @@ const Cart = () => {
   );
 
   const shipping =
-    subtotal >= 5000 || subtotal === 0
-      ? 0
-      : 250;
+   0
 
   const total = subtotal + shipping;
 
@@ -759,14 +757,10 @@ const Cart = () => {
             </strong>
           </div>
 
-          {subtotal > 0 && subtotal < 5000 && (
-            <p className="shipping-note">
-              Add Rs.{" "}
-              {(5000 - subtotal).toLocaleString()} more
-              to qualify for shipping at no extra cost.
-            </p>
-          )}
-
+        <div className="summary-line">
+  <span>Shipping</span>
+  <strong>Included</strong>
+</div>
           <div className="summary-divider" />
 
           {/* TOTAL */}
