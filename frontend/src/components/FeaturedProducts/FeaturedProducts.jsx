@@ -19,7 +19,7 @@ import "./FeaturedProducts.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-"https://maamta.onrender.com/api";
+  "http://localhost:3000/api";
 const WISHLIST_KEY = "mamta_wishlist";
 
 /* =========================================================
@@ -88,7 +88,7 @@ const FeaturedProducts = () => {
         setLoading(true);
 
         const response = await axios.get(
-          `${API_URL}/admin/products`
+          `${API_URL}/products`
         );
 
         const backendProducts = Array.isArray(
