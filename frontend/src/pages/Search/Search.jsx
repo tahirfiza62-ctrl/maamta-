@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import axios from "axios";
+
 import {
   Search as SearchIcon,
   Heart,
@@ -11,9 +12,15 @@ import {
 } from "lucide-react";
 
 import "./Search.css";
+
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const Search = () => {
+  "https://maamta.onrender.com/api";
+
+const PLACEHOLDER_IMAGE =
+  "https://placehold.co/700x700/F4D9DC/4A3032?text=MAMTA";
+
+const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialQuery = searchParams.get("q") || "";
@@ -21,34 +28,48 @@ const API_URL =
   const [query, setQuery] = useState(initialQuery);
   const [products, setProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  /* =========================================================
+     SYNC SEARCH QUERY WITH URL
+  ========================================================= */
+
+  useEffect(() => {
+    setQuery(searchParams.get("q") || "");
+  }, [searchParams]);
 
   /* =========================================================
      LOAD PRODUCTS
   ========================================================= */
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchProducts = async () => {
       try {
-        setLoading(true);
-
         const response = await axios.get(
           `${API_URL}/admin/products`
         );
 
+        if (cancelled) return;
+
         const data = response.data;
 
         const productList =
-          data.products ||
-          data.data ||
+          data?.products ||
+          data?.data ||
           [];
 
-        setProducts(
-          Array.isArray(productList)
-            ? productList
-            : []
-        );
+        const validProducts = Array.isArray(productList)
+          ? productList.filter(
+              (product) => product.active !== false
+            )
+          : [];
+
+        setProducts(validProducts);
       } catch (error) {
+        if (cancelled) return;
+
         console.error(
           "SEARCH PRODUCTS ERROR:",
           error
@@ -56,11 +77,17 @@ const API_URL =
 
         setProducts([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchProducts();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* =========================================================
@@ -70,17 +97,12 @@ const API_URL =
   useEffect(() => {
     const loadWishlist = () => {
       try {
-        const saved =
-          JSON.parse(
-            localStorage.getItem(
-              "mamta_wishlist"
-            )
-          ) || [];
+        const saved = JSON.parse(
+          localStorage.getItem("mamta_wishlist") || "[]"
+        );
 
         setWishlist(
-          Array.isArray(saved)
-            ? saved
-            : []
+          Array.isArray(saved) ? saved : []
         );
       } catch (error) {
         console.error(
@@ -114,8 +136,7 @@ const API_URL =
   const handleSearch = (e) => {
     e.preventDefault();
 
-    const trimmedQuery =
-      query.trim();
+    const trimmedQuery = query.trim();
 
     if (trimmedQuery) {
       setSearchParams({
@@ -130,8 +151,7 @@ const API_URL =
      FILTER PRODUCTS
   ========================================================= */
 
-  const searchTerm =
-    query.trim().toLowerCase();
+  const searchTerm = query.trim().toLowerCase();
 
   const filteredProducts =
     searchTerm === ""
@@ -160,61 +180,46 @@ const API_URL =
   const isInWishlist = (productId) => {
     return wishlist.some(
       (item) =>
-        (item._id || item.id) ===
-        productId
+        String(item._id || item.id) ===
+        String(productId)
     );
   };
 
   const toggleWishlist = (product) => {
-    const productId =
-      product._id || product.id;
+    const productId = product._id || product.id;
 
     try {
-      const saved =
-        JSON.parse(
-          localStorage.getItem(
-            "mamta_wishlist"
-          )
-        ) || [];
+      const saved = JSON.parse(
+        localStorage.getItem("mamta_wishlist") || "[]"
+      );
 
-      const currentWishlist =
-        Array.isArray(saved)
-          ? saved
-          : [];
+      const currentWishlist = Array.isArray(saved)
+        ? saved
+        : [];
 
-      const exists =
-        currentWishlist.some(
-          (item) =>
-            (item._id || item.id) ===
-            productId
-        );
+      const exists = currentWishlist.some(
+        (item) =>
+          String(item._id || item.id) ===
+          String(productId)
+      );
 
       const updatedWishlist = exists
         ? currentWishlist.filter(
             (item) =>
-              (item._id || item.id) !==
-              productId
+              String(item._id || item.id) !==
+              String(productId)
           )
-        : [
-            ...currentWishlist,
-            product,
-          ];
+        : [...currentWishlist, product];
 
       localStorage.setItem(
         "mamta_wishlist",
-        JSON.stringify(
-          updatedWishlist
-        )
+        JSON.stringify(updatedWishlist)
       );
 
-      setWishlist(
-        updatedWishlist
-      );
+      setWishlist(updatedWishlist);
 
       window.dispatchEvent(
-        new Event(
-          "wishlistUpdated"
-        )
+        new Event("wishlistUpdated")
       );
     } catch (error) {
       console.error(
@@ -240,7 +245,7 @@ const API_URL =
       return product.images[0];
     }
 
-    return "https://placehold.co/700x700/F4D9DC/4A3032?text=MAMTA";
+    return PLACEHOLDER_IMAGE;
   };
 
   /* =========================================================
@@ -361,8 +366,7 @@ const API_URL =
                 <p>
                   {filteredProducts.length}{" "}
                   product
-                  {filteredProducts.length !==
-                  1
+                  {filteredProducts.length !== 1
                     ? "s"
                     : ""}
                 </p>
@@ -375,11 +379,13 @@ const API_URL =
 
           {loading && (
             <div className="search-message">
+
               <div className="search-spinner"></div>
 
               <p>
                 Finding your favorites...
               </p>
+
             </div>
           )}
 
@@ -415,10 +421,12 @@ const API_URL =
               <div className="search-message">
 
                 <div className="empty-search-icon">
+
                   <SearchIcon
                     size={34}
                     strokeWidth={1.3}
                   />
+
                 </div>
 
                 <h3>
@@ -447,155 +455,133 @@ const API_URL =
             filteredProducts.length > 0 && (
               <div className="search-product-grid">
 
-                {filteredProducts.map(
-                  (product) => {
+                {filteredProducts.map((product) => {
 
-                    const productId =
-                      product._id ||
-                      product.id;
+                  const productId =
+                    product._id || product.id;
 
-                    const liked =
-                      isInWishlist(
-                        productId
-                      );
+                  const liked =
+                    isInWishlist(productId);
 
-                    return (
-                      <article
-                        className="search-product-card"
-                        key={productId}
-                      >
+                  return (
+                    <article
+                      className="search-product-card"
+                      key={productId}
+                    >
 
-                        {/* IMAGE */}
+                      {/* IMAGE */}
 
-                        <div className="search-product-image">
+                      <div className="search-product-image">
 
-                          <img
-                            src={getImage(
-                              product
-                            )}
-                            alt={
-                              product.name
+                        <img
+                          src={getImage(product)}
+                          alt={product.name || "MAMTA product"}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = PLACEHOLDER_IMAGE;
+                          }}
+                        />
+
+                        {product.category && (
+                          <span className="search-product-badge">
+                            {product.category}
+                          </span>
+                        )}
+
+                        {/* WISHLIST */}
+
+                        <button
+                          type="button"
+                          className={`search-wishlist ${
+                            liked ? "active" : ""
+                          }`}
+                          onClick={() =>
+                            toggleWishlist(product)
+                          }
+                          aria-label={
+                            liked
+                              ? "Remove from wishlist"
+                              : "Add to wishlist"
+                          }
+                        >
+
+                          <Heart
+                            size={18}
+                            strokeWidth={1.5}
+                            fill={
+                              liked
+                                ? "currentColor"
+                                : "none"
                             }
-                            onError={(e) => {
-                              e.currentTarget.src =
-                                "https://placehold.co/700x700/F4D9DC/4A3032?text=MAMTA";
-                            }}
                           />
 
-                          {product.category && (
-                            <span className="search-product-badge">
-                              {product.category}
-                            </span>
+                        </button>
+
+                        {/* VIEW */}
+
+                        <Link
+                          to={`/product/${productId}`}
+                          className="search-view-button"
+                        >
+
+                          <span>
+                            View Details
+                          </span>
+
+                          <ArrowUpRight size={15} />
+
+                        </Link>
+
+                      </div>
+
+                      {/* INFO */}
+
+                      <div className="search-product-info">
+
+                        <h3>
+                          {product.name}
+                        </h3>
+
+                        <div className="search-rating">
+
+                          <div className="search-stars">
+
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                size={12}
+                                fill="currentColor"
+                                strokeWidth={1.2}
+                              />
+                            ))}
+
+                          </div>
+
+                          <span>
+                            {product.rating || "5.0"}
+                          </span>
+
+                        </div>
+
+                        <div className="search-price">
+
+                          <strong>
+                            {formatPrice(product.price)}
+                          </strong>
+
+                          {product.oldPrice && (
+                            <del>
+                              {formatPrice(product.oldPrice)}
+                            </del>
                           )}
 
-                          {/* WISHLIST */}
-
-                          <button
-                            type="button"
-                            className={`search-wishlist ${
-                              liked
-                                ? "active"
-                                : ""
-                            }`}
-                            onClick={() =>
-                              toggleWishlist(
-                                product
-                              )
-                            }
-                            aria-label={
-                              liked
-                                ? "Remove from wishlist"
-                                : "Add to wishlist"
-                            }
-                          >
-
-                            <Heart
-                              size={18}
-                              strokeWidth={1.5}
-                              fill={
-                                liked
-                                  ? "currentColor"
-                                  : "none"
-                              }
-                            />
-
-                          </button>
-
-                          {/* VIEW */}
-
-                          <Link
-                            to={`/product/${productId}`}
-                            className="search-view-button"
-                          >
-
-                            <span>
-                              View Details
-                            </span>
-
-                            <ArrowUpRight
-                              size={15}
-                            />
-
-                          </Link>
-
                         </div>
 
-                        {/* INFO */}
+                      </div>
 
-                        <div className="search-product-info">
-
-                          <h3>
-                            {product.name}
-                          </h3>
-
-                          <div className="search-rating">
-
-                            <div className="search-stars">
-
-                              {[1, 2, 3, 4, 5].map(
-                                (star) => (
-                                  <Star
-                                    key={star}
-                                    size={12}
-                                    fill="currentColor"
-                                    strokeWidth={1.2}
-                                  />
-                                )
-                              )}
-
-                            </div>
-
-                            <span>
-                              {product.rating ||
-                                "5.0"}
-                            </span>
-
-                          </div>
-
-                          <div className="search-price">
-
-                            <strong>
-                              {formatPrice(
-                                product.price
-                              )}
-                            </strong>
-
-                            {product.oldPrice && (
-                              <del>
-                                {formatPrice(
-                                  product.oldPrice
-                                )}
-                              </del>
-                            )}
-
-                          </div>
-
-                        </div>
-
-                      </article>
-                    );
-                  }
-                )}
+                    </article>
+                  );
+                })}
 
               </div>
             )}

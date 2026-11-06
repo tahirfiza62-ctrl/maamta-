@@ -1,5 +1,5 @@
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -9,20 +9,15 @@ import {
   LockKeyhole,
   Mail,
 } from "lucide-react";
-import ReCAPTCHA from "react-google-recaptcha";
 import axios from "axios";
 import "./Login.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-"https://maamta.onrender.com/api";
-const RECAPTCHA_SITE_KEY =
-  import.meta.env.VITE_RECAPTCHA_SITE_KEY ||
-  "6LfRtPYtAAAAAJ3_2BhKNA9HbniWJJhJWb6HgE5B";
+  "https://maamta.onrender.com/api";
 
 const Login = () => {
   const navigate = useNavigate();
-  const captchaRef = useRef(null);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -32,7 +27,6 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [captchaToken, setCaptchaToken] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,28 +39,11 @@ const Login = () => {
     setError("");
   };
 
-  const handleCaptchaChange = (token) => {
-    setCaptchaToken(token);
-    setError("");
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!formData.email.trim() || !formData.password) {
       setError("Please enter your email and password.");
-      return;
-    }
-
-    if (!RECAPTCHA_SITE_KEY) {
-      setError(
-        "CAPTCHA is not configured. Please add your reCAPTCHA site key to the frontend .env file."
-      );
-      return;
-    }
-
-    if (!captchaToken) {
-      setError("Please complete the reCAPTCHA verification.");
       return;
     }
 
@@ -79,7 +56,6 @@ const Login = () => {
         {
           email: formData.email.trim(),
           password: formData.password,
-          captchaToken,
         }
       );
 
@@ -94,7 +70,9 @@ const Login = () => {
       }
 
       if (!token || !user) {
-        setError("Login response is incomplete. Please try again.");
+        setError(
+          "Login response is incomplete. Please try again."
+        );
         return;
       }
 
@@ -116,10 +94,6 @@ const Login = () => {
         error.response?.data?.message ||
           "Unable to login. Please try again."
       );
-
-      // CAPTCHA tokens should be refreshed after a failed attempt.
-      setCaptchaToken(null);
-      captchaRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -131,9 +105,12 @@ const Login = () => {
       <div className="auth-background-shape auth-shape-two" />
 
       <div className="mamta-auth-container">
+
         {/* LEFT SIDE */}
+
         <section className="auth-brand-panel">
           <div className="auth-brand-content">
+
             <div className="auth-brand-mark">
               <Heart size={18} fill="currentColor" />
               <span>MAMTA</span>
@@ -159,6 +136,7 @@ const Login = () => {
 
             <div className="auth-brand-note">
               <span>01</span>
+
               <div>
                 <strong>Made with intention</strong>
                 <small>
@@ -166,12 +144,15 @@ const Login = () => {
                 </small>
               </div>
             </div>
+
           </div>
         </section>
 
         {/* RIGHT SIDE */}
+
         <section className="auth-form-panel">
           <div className="auth-form-wrapper">
+
             <div className="auth-form-heading">
               <span>HELLO AGAIN</span>
 
@@ -195,7 +176,9 @@ const Login = () => {
               onSubmit={handleSubmit}
               noValidate
             >
+
               {/* EMAIL */}
+
               <div className="auth-field">
                 <label htmlFor="email">
                   EMAIL ADDRESS
@@ -219,6 +202,7 @@ const Login = () => {
               </div>
 
               {/* PASSWORD */}
+
               <div className="auth-field">
                 <div className="auth-label-row">
                   <label htmlFor="password">
@@ -247,54 +231,33 @@ const Login = () => {
                     required
                   />
 
-               
-<button
-  type="button"
-  className="password-toggle"
-  onClick={() => setShowPassword((current) => !current)}
-  aria-label={
-    showPassword ? "Hide password" : "Show password"
-  }
->
-  {showPassword ? (
-    <Eye size={19} />
-  ) : (
-    <EyeOff size={19} />
-  )}
-</button>
-
-
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() =>
+                      setShowPassword((current) => !current)
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                  >
+                    {showPassword ? (
+                      <Eye size={19} />
+                    ) : (
+                      <EyeOff size={19} />
+                    )}
+                  </button>
                 </div>
               </div>
 
-              {/* GOOGLE RECAPTCHA */}
-              <div className="auth-captcha">
-                {RECAPTCHA_SITE_KEY ? (
-                  <ReCAPTCHA
-                    ref={captchaRef}
-                    sitekey={RECAPTCHA_SITE_KEY}
-                    onChange={handleCaptchaChange}
-                    onExpired={() => setCaptchaToken(null)}
-                    onErrored={() => {
-                      setCaptchaToken(null);
-                      setError(
-                        "CAPTCHA could not load. Please check your internet connection and site key."
-                      );
-                    }}
-                  />
-                ) : (
-                  <p className="auth-captcha-error">
-                    CAPTCHA site key is missing. Configure
-                    VITE_RECAPTCHA_SITE_KEY in your frontend .env file.
-                  </p>
-                )}
-              </div>
-
               {/* SUBMIT */}
+
               <button
                 type="submit"
                 className="auth-submit"
-                disabled={loading || !captchaToken}
+                disabled={loading}
               >
                 <span>
                   {loading ? "SIGNING IN..." : "SIGN IN"}
@@ -302,6 +265,7 @@ const Login = () => {
 
                 {!loading && <ArrowRight size={18} />}
               </button>
+
             </form>
 
             <div className="auth-divider">
@@ -318,8 +282,10 @@ const Login = () => {
             <Link to="/" className="auth-back-home">
               ← Back to MAMTA
             </Link>
+
           </div>
         </section>
+
       </div>
     </main>
   );
