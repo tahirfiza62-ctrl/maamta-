@@ -1,36 +1,36 @@
 
-const nodemailer = require("nodemailer");
+const escapeHtml = (value = "") => {
+  return String(value).replace(/[&<>"']/g, (char) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+
+    return entities[char];
+  });
+};
 
 // =========================================================
-// GMAIL TRANSPORTER
-// =========================================================
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-
-  // Prevent SMTP from hanging indefinitely
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-});
-
-// =========================================================
-// SEND VERIFICATION EMAIL
+// SEND VERIFICATION EMAIL USING RESEND API
 // =========================================================
 
 const sendVerificationEmail = async (email, name, code) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    throw new Error("EMAIL_USER or EMAIL_PASSWORD is missing.");
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is missing.");
   }
 
+  const safeName = escapeHtml(name);
+  const safeCode = escapeHtml(code);
+
   const mailOptions = {
-    from: `"MAMTA" <${process.env.EMAIL_USER}>`,
-    to: email,
+    from: "MAMTA <onboarding@resend.dev>",
+    to: [email],
+
     subject: "Your MAMTA verification code",
 
     html: `
@@ -38,178 +38,140 @@ const sendVerificationEmail = async (email, name, code) => {
       <html>
         <head>
           <meta charset="UTF-8" />
-          <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0"
-          />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Your MAMTA verification code</title>
         </head>
 
-        <body
-          style="
-            margin: 0;
-            padding: 0;
-            background: #fff9f4;
-            font-family: Arial, Helvetica, sans-serif;
-            color: #4a3032;
-          "
-        >
-          <div
-            style="
-              max-width: 600px;
-              margin: 40px auto;
-              background: #ffffff;
-              border-radius: 22px;
-              overflow: hidden;
-              box-shadow: 0 15px 50px rgba(74, 48, 50, 0.08);
-            "
-          >
+        <body style="
+          margin: 0;
+          padding: 0;
+          background: #fff9f4;
+          font-family: Arial, Helvetica, sans-serif;
+          color: #4a3032;
+        ">
 
-            <!-- HEADER -->
+          <div style="
+            max-width: 600px;
+            margin: 40px auto;
+            background: #ffffff;
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 15px 50px rgba(74,48,50,0.08);
+          ">
 
-            <div
-              style="
-                padding: 38px 25px;
-                text-align: center;
-                background: #4a3032;
-              "
-            >
-              <div
-                style="
-                  color: #ffffff;
-                  font-size: 28px;
-                  font-weight: 700;
-                  letter-spacing: 5px;
-                "
-              >
+            <div style="
+              padding: 38px 25px;
+              text-align: center;
+              background: #4a3032;
+            ">
+              <div style="
+                color: #ffffff;
+                font-size: 28px;
+                font-weight: 700;
+                letter-spacing: 5px;
+              ">
                 MAMTA
               </div>
 
-              <div
-                style="
-                  margin-top: 10px;
-                  color: #f4ddd6;
-                  font-size: 11px;
-                  letter-spacing: 2px;
-                "
-              >
+              <div style="
+                margin-top: 10px;
+                color: #f4ddd6;
+                font-size: 11px;
+                letter-spacing: 2px;
+              ">
                 THOUGHTFUL COMFORT
               </div>
             </div>
 
-            <!-- CONTENT -->
+            <div style="
+              padding: 45px 40px;
+              text-align: center;
+            ">
 
-            <div
-              style="
-                padding: 45px 40px;
-                text-align: center;
-              "
-            >
-              <div
-                style="
-                  width: 70px;
-                  height: 70px;
-                  margin: 0 auto 25px;
-                  border-radius: 50%;
-                  background: #f8ebe5;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-size: 30px;
-                "
-              >
+              <div style="
+                width: 70px;
+                height: 70px;
+                margin: 0 auto 25px;
+                border-radius: 50%;
+                background: #f8ebe5;
+                font-size: 30px;
+                line-height: 70px;
+              ">
                 ♡
               </div>
 
-              <h1
-                style="
-                  margin: 0 0 15px;
-                  color: #4a3032;
-                  font-size: 28px;
-                  font-weight: 600;
-                "
-              >
+              <h1 style="
+                margin: 0 0 15px;
+                color: #4a3032;
+                font-size: 28px;
+                font-weight: 600;
+              ">
                 Verify your email
               </h1>
 
-              <p
-                style="
-                  margin: 0 0 15px;
-                  color: #806a6e;
-                  font-size: 15px;
-                "
-              >
-                Hi ${name},
+              <p style="
+                margin: 0 0 15px;
+                color: #806a6e;
+                font-size: 15px;
+              ">
+                Hi ${safeName},
               </p>
 
-              <p
-                style="
-                  margin: 0 auto 25px;
-                  max-width: 440px;
-                  color: #806a6e;
-                  font-size: 14px;
-                  line-height: 1.8;
-                "
-              >
+              <p style="
+                margin: 0 auto 25px;
+                max-width: 440px;
+                color: #806a6e;
+                font-size: 14px;
+                line-height: 1.8;
+              ">
                 Thank you for creating your MAMTA account.
                 Enter the verification code below to
                 complete your registration.
               </p>
 
-              <!-- VERIFICATION CODE -->
-
-              <div
-                style="
-                  display: inline-block;
-                  padding: 18px 35px;
-                  margin: 5px 0 25px;
-                  background: #f8ebe5;
-                  border-radius: 12px;
-                  color: #4a3032;
-                  font-size: 32px;
-                  font-weight: 700;
-                  letter-spacing: 8px;
-                "
-              >
-                ${code}
+              <div style="
+                display: inline-block;
+                padding: 18px 35px;
+                margin: 5px 0 25px;
+                background: #f8ebe5;
+                border-radius: 12px;
+                color: #4a3032;
+                font-size: 32px;
+                font-weight: 700;
+                letter-spacing: 8px;
+              ">
+                ${safeCode}
               </div>
 
-              <p
-                style="
-                  margin: 0;
-                  color: #9a8588;
-                  font-size: 12px;
-                  line-height: 1.7;
-                "
-              >
+              <p style="
+                margin: 0;
+                color: #9a8588;
+                font-size: 12px;
+                line-height: 1.7;
+              ">
                 This verification code expires in
                 <strong>24 hours.</strong>
               </p>
 
-              <p
-                style="
-                  margin: 15px 0 0;
-                  color: #9a8588;
-                  font-size: 12px;
-                  line-height: 1.7;
-                "
-              >
+              <p style="
+                margin: 15px 0 0;
+                color: #9a8588;
+                font-size: 12px;
+                line-height: 1.7;
+              ">
                 If you did not create a MAMTA account,
                 you can safely ignore this email.
               </p>
+
             </div>
 
-            <!-- FOOTER -->
-
-            <div
-              style="
-                padding: 22px;
-                text-align: center;
-                background: #fcf5f1;
-                color: #9a8588;
-                font-size: 11px;
-              "
-            >
+            <div style="
+              padding: 22px;
+              text-align: center;
+              background: #fcf5f1;
+              color: #9a8588;
+              font-size: 11px;
+            ">
               © ${new Date().getFullYear()}
               MAMTA. All rights reserved.
             </div>
@@ -218,22 +180,41 @@ const sendVerificationEmail = async (email, name, code) => {
         </body>
       </html>
     `,
+
+    text: `Hi ${name}, your MAMTA verification code is ${code}. It expires in 24 hours.`,
   };
 
-  const startTime = Date.now();
+  console.log("RESEND: Sending verification email...");
 
-  try {
-    const result = await transporter.sendMail(mailOptions);
+  const response = await fetch(
+    "https://api.resend.com/emails",
+    {
+      method: "POST",
 
-    console.log(
-      `VERIFICATION EMAIL SENT in ${Date.now() - startTime} ms`
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify(mailOptions),
+
+      signal: AbortSignal.timeout(15000),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error("RESEND API ERROR:", result);
+
+    throw new Error(
+      result.message || result.name || "Email delivery failed."
     );
-
-    return result;
-  } catch (error) {
-    console.error("EMAIL SENDING FAILED:", error.message);
-    throw error;
   }
+
+  console.log("RESEND: Email accepted successfully:", result.id);
+
+  return result;
 };
 
 // =========================================================
