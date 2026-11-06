@@ -11,9 +11,11 @@ import {
 
 import "./NursingPillows.css";
 
-const API_URL =
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const NursingPillows = () => {
+  "https://maamta.onrender.com/api"
+).replace(/\/$/, "");
+const NursingPillows = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [wishlist, setWishlist] = useState([]);
@@ -32,7 +34,7 @@ const API_URL =
         }
 
         const response = await axios.get(
-          `${API_URL}/admin/products`
+          `${API_URL}/products`
         );
 
         const allProducts = Array.isArray(

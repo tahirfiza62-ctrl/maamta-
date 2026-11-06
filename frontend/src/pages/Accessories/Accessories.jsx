@@ -4,9 +4,11 @@ import { ArrowUpRight } from "lucide-react";
 
 import "./Accessories.css";
 
-const API_URL =
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const Accessories = () => {
+  "https://maamta.onrender.com/api"
+).replace(/\/$/, "");
+const Accessories = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,7 +20,7 @@ useEffect(() => {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_URL}/admin/products`);
+      const response = await fetch(`${API_URL}/products`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch products");
