@@ -1082,3 +1082,58 @@ font-size: 17px;
     transform: translateY(0);
   }
 }
+/* =========================================================
+   MOBILE — REMOVE ANIMATIONS
+========================================================= */
+
+@media (max-width: 768px) {
+  /* Remove product card animations */
+  .product-card,
+  .product-card:hover,
+  .product-card:active {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Remove image zoom animation */
+  .product-image img,
+  .product-card:hover .product-image img,
+  .product-card:hover img {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Remove quick view animations */
+  .quick-view,
+  .product-card:hover .quick-view {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Remove wishlist button animation */
+  .wishlist-button,
+  .wishlist-button:hover,
+  .wishlist-button:active {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Remove icon animations */
+  .quick-view svg,
+  .quick-view:hover svg {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Remove ScrollReveal animations */
+  .featured-products .reveal,
+  .featured-products .visible,
+  .featured-products [class*="stagger-"] {
+    animation: none !important;
+    transition: none !important;
+  }
+}

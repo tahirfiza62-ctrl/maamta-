@@ -108,103 +108,54 @@ export default function ProductReviews({
      FETCH REVIEWS FOR CURRENT PRODUCT ONLY
   ======================================================= */
 
-  const loadReviews = useCallback(async () => {
-    if (!resolvedProductId) {
-      setCustomerReviews([]);
-      setLoading(false);
-      return;
-    }
+const loadReviews = useCallback(async () => {
+  if (!resolvedProductId) {
+    setCustomerReviews([]);
+    setLoading(false);
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const response = await axios.get(`${API_URL}/admin/reviews`, {
-        params: {
-          productId: resolvedProductId,
-        },
-      });
+  try {
+    const response = await axios.get(`${API_URL}/reviews`, {
+      params: {
+        productId: resolvedProductId,
+      },
+    });
 
-      const data = Array.isArray(response.data)
-        ? response.data
-        : response.data?.reviews || [];
+    const data = Array.isArray(response.data)
+      ? response.data
+      : response.data?.reviews || [];
 
-      const currentProductReviews = data.filter((review) => {
-        const reviewProductId = String(
-          review.productId?._id ||
-            review.productId?.id ||
-            review.productId ||
-            ""
-        );
+    const currentProductReviews = data.filter((review) => {
+      const reviewProductId = String(
+        review.productId?._id ||
+        review.productId?.id ||
+        review.productId ||
+        ""
+      );
 
-        return reviewProductId === resolvedProductId;
-      });
+      return reviewProductId === resolvedProductId;
+    });
 
-      setCustomerReviews(currentProductReviews);
-    } catch (error) {
-      console.error("Unable to load product reviews:", error);
+    setCustomerReviews(currentProductReviews);
+  } catch (error) {
+    console.error(
+      "Unable to load product reviews:",
+      error.response?.data || error
+    );
 
-      setCustomerReviews([]);
-      toast.error("Could not load customer reviews.");
-    } finally {
-      setLoading(false);
-    }
-  }, [resolvedProductId]);
+    setCustomerReviews([]);
+    toast.error("Could not load customer reviews.");
+  } finally {
+    setLoading(false);
+  }
+}, [resolvedProductId]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchReviews = async () => {
-      if (!resolvedProductId) {
-        setCustomerReviews([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await axios.get(`${API_URL}/admin/reviews`, {
-          params: {
-            productId: resolvedProductId,
-          },
-        });
-
-        if (cancelled) return;
-
-        const data = Array.isArray(response.data)
-          ? response.data
-          : response.data?.reviews || [];
-
-        const currentProductReviews = data.filter((review) => {
-          const reviewProductId = String(
-            review.productId?._id ||
-              review.productId?.id ||
-              review.productId ||
-              ""
-          );
-
-          return reviewProductId === resolvedProductId;
-        });
-
-        setCustomerReviews(currentProductReviews);
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Unable to load product reviews:", error);
-          setCustomerReviews([]);
-          toast.error("Could not load customer reviews.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchReviews();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [resolvedProductId]);
-
+useEffect(() => {
+  loadReviews();
+}, [loadReviews]);
   /* =======================================================
      REVIEW STATISTICS
   ======================================================= */
@@ -299,13 +250,11 @@ export default function ProductReviews({
         message: form.message.trim(),
         productId: resolvedProductId,
       };
-
-      const response = await axios.post(
-        `${API_URL}/admin/reviews`,
-       
-        payload
-      );
-
+const response = await axios.post(
+  `${API_URL}/reviews`,
+  payload
+);
+      
       const savedReview = response.data?.review || response.data;
 
       if (savedReview?._id) {

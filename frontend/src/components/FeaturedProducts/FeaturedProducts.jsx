@@ -17,10 +17,52 @@ import "./FeaturedProducts.css";
    API
 ========================================================= */
 
-const API_URL =
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-"https://maamta.onrender.com/api";
-const WISHLIST_KEY = "mamta_wishlist";
+  "https://maamta.onrender.com/api"
+).replace(/\/+$/, "");
+
+/* =========================================================
+   USER HELPERS
+========================================================= */
+
+const getCurrentUser = () => {
+  try {
+    const token = localStorage.getItem("mamta_user_token");
+
+    if (!token) return null;
+
+    const storedUser =
+      localStorage.getItem("mamta_user") ||
+      localStorage.getItem("mamta_user_data") ||
+      localStorage.getItem("currentUser");
+
+    if (!storedUser) return null;
+
+    const parsedUser = JSON.parse(storedUser);
+
+    return parsedUser?.user || parsedUser;
+  } catch (error) {
+    console.error("USER READ ERROR:", error);
+    return null;
+  }
+};
+
+/* =========================================================
+   ACCOUNT-SPECIFIC WISHLIST KEY
+========================================================= */
+
+const getWishlistKey = (user) => {
+  if (!user) return null;
+
+  const userId = user._id || user.id || user.email;
+
+  if (!userId) return null;
+
+  return `mamta_wishlist_${encodeURIComponent(
+    String(userId).trim().toLowerCase()
+  )}`;
+};
 
 /* =========================================================
    FORMAT PRICE
@@ -51,16 +93,23 @@ const getProductCategory = (product) => {
 };
 
 /* =========================================================
-   READ WISHLIST
+   READ CURRENT USER'S WISHLIST
 ========================================================= */
 
 const readWishlist = () => {
   try {
+    const user = getCurrentUser();
+    const wishlistKey = getWishlistKey(user);
+
+    if (!wishlistKey) return [];
+
     const savedWishlist = JSON.parse(
-      localStorage.getItem(WISHLIST_KEY) || "[]"
+      localStorage.getItem(wishlistKey) || "[]"
     );
 
-    return Array.isArray(savedWishlist) ? savedWishlist : [];
+    return Array.isArray(savedWishlist)
+      ? savedWishlist
+      : [];
   } catch (error) {
     console.error("Unable to read wishlist:", error);
     return [];
@@ -88,7 +137,7 @@ const FeaturedProducts = () => {
         setLoading(true);
 
         const response = await axios.get(
-          `${API_URL}/products`
+          `${API_URL}/admin/products`
         );
 
         const backendProducts = Array.isArray(
@@ -141,9 +190,24 @@ const FeaturedProducts = () => {
       loadWishlist
     );
 
-    // Synchronize if another browser tab updates the wishlist.
+    window.addEventListener(
+      "authChanged",
+      loadWishlist
+    );
+
+    window.addEventListener(
+      "authUpdated",
+      loadWishlist
+    );
+
+    // Synchronize wishlist changes from another browser tab.
     const handleStorage = (event) => {
-      if (event.key === WISHLIST_KEY) {
+      if (
+        event.key?.startsWith("mamta_wishlist_") ||
+        event.key === "mamta_user" ||
+        event.key === "mamta_user_token" ||
+        event.key === "mamta_user_data"
+      ) {
         loadWishlist();
       }
     };
@@ -153,6 +217,16 @@ const FeaturedProducts = () => {
     return () => {
       window.removeEventListener(
         "wishlistUpdated",
+        loadWishlist
+      );
+
+      window.removeEventListener(
+        "authChanged",
+        loadWishlist
+      );
+
+      window.removeEventListener(
+        "authUpdated",
         loadWishlist
       );
 
@@ -189,7 +263,25 @@ const FeaturedProducts = () => {
         return;
       }
 
-      const currentWishlist = readWishlist();
+      const user = getCurrentUser();
+      const wishlistKey = getWishlistKey(user);
+
+      if (!wishlistKey) {
+        toast.error("Please login to use your wishlist.");
+        return;
+      }
+
+      const currentWishlist = (() => {
+        try {
+          const saved = JSON.parse(
+            localStorage.getItem(wishlistKey) || "[]"
+          );
+
+          return Array.isArray(saved) ? saved : [];
+        } catch {
+          return [];
+        }
+      })();
 
       const exists = currentWishlist.some(
         (item) =>
@@ -204,7 +296,7 @@ const FeaturedProducts = () => {
         : [...currentWishlist, product];
 
       localStorage.setItem(
-        WISHLIST_KEY,
+        wishlistKey,
         JSON.stringify(updatedWishlist)
       );
 
@@ -261,6 +353,7 @@ const FeaturedProducts = () => {
   return (
     <section className="featured-products">
       <div className="featured-container">
+
         {/* HEADING */}
 
         <ScrollReveal direction="down">
@@ -314,6 +407,7 @@ const FeaturedProducts = () => {
                 className={`stagger-${index + 1}`}
               >
                 <article className="product-card">
+
                   {/* PRODUCT IMAGE */}
 
                   <div className="product-image">
@@ -431,6 +525,7 @@ const FeaturedProducts = () => {
         <ScrollReveal direction="up">
           {/* Add a bottom CTA here if needed. */}
         </ScrollReveal>
+
       </div>
     </section>
   );

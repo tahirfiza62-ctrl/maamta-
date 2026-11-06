@@ -593,3 +593,35 @@
   }
 
 }
+/* =========================================================
+   SLOWER TESTIMONIAL MOVEMENT — ALL SCREEN SIZES
+========================================================= */
+
+/* Desktop */
+.testimonial-track {
+  display: flex;
+  width: max-content;
+  gap: 22px;
+  animation: testimonialMove 90s linear infinite;
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .testimonial-track {
+    gap: 18px;
+    animation-duration: 75s;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .testimonial-track {
+    gap: 16px;
+    animation-duration: 65s;
+  }
+}
+
+/* Pause when mouse is over testimonials */
+.testimonial-slider:hover .testimonial-track {
+  animation-play-state: paused;
+}
