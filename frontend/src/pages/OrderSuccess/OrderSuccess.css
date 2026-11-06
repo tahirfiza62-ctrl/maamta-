@@ -115,7 +115,7 @@
 
   color: #bd6f7c;
 
-  font-size: 10px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: 2.8px;
 }
@@ -152,7 +152,7 @@
   margin: 0 auto;
 
   color: #73758c;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.8;
 }
 
@@ -176,14 +176,14 @@
 
 .success-order-number span {
   color: #a39a9a;
-  font-size: 8px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 2px;
 }
 
 .success-order-number strong {
   color: #4a3032;
-  font-size: 13px;
+  font-size: 15px;
   letter-spacing: 1px;
 }
 
@@ -247,7 +247,7 @@
 
 .status-step strong {
   display: block;
-  font-size: 11px;
+  font-size: 17px;
 }
 
 .status-step span {
@@ -255,7 +255,7 @@
   margin-top: 3px;
 
   color: #aaa0a0;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .status-step.active span {
@@ -313,7 +313,7 @@
 
 .success-card-header span {
   color: #bd6f7c;
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 2px;
 }
@@ -328,7 +328,7 @@
 
 .success-card-header > strong {
   color: #73758c;
-  font-size: 10px;
+  font-size: 17px;
 }
 
 /* =========================================================
@@ -383,7 +383,7 @@
   background: #4a3032;
   color: white;
 
-  font-size: 8px;
+  font-size: 15px;
   font-weight: 700;
 }
 
