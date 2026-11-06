@@ -23,6 +23,25 @@ const API_URL = (
 ).replace(/\/+$/, "");
 
 /* =========================================================
+   FEATURED PRODUCTS CACHE
+========================================================= */
+
+const FEATURED_CACHE_KEY = "mamta_featured_products";
+
+const getCachedFeaturedProducts = () => {
+  try {
+    const cached = JSON.parse(
+      localStorage.getItem(FEATURED_CACHE_KEY) || "[]"
+    );
+
+    return Array.isArray(cached) ? cached : [];
+  } catch (error) {
+    console.error("FEATURED CACHE ERROR:", error);
+    return [];
+  }
+};
+
+/* =========================================================
    USER HELPERS
 ========================================================= */
 
@@ -89,7 +108,7 @@ const getProductImage = (product) => {
 };
 
 const getProductCategory = (product) => {
-  return product?.category || "MAMTA COLLECTION";
+  return product?.category || "MAAMTA COLLECTION";
 };
 
 /* =========================================================
@@ -121,12 +140,19 @@ const readWishlist = () => {
 ========================================================= */
 
 const FeaturedProducts = () => {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState(
+    getCachedFeaturedProducts
+  );
+
   const [wishlist, setWishlist] = useState(readWishlist);
-  const [loading, setLoading] = useState(true);
+
+  const [loading, setLoading] = useState(
+    () => getCachedFeaturedProducts().length === 0
+  );
 
   /* =======================================================
      LOAD PRODUCTS FROM BACKEND
+     SHOW CACHE FIRST, UPDATE IN BACKGROUND
   ======================================================= */
 
   useEffect(() => {
@@ -134,10 +160,11 @@ const FeaturedProducts = () => {
 
     const loadProducts = async () => {
       try {
-        setLoading(true);
-
         const response = await axios.get(
-          `${API_URL}/admin/products`
+          `${API_URL}/admin/products`,
+          {
+            timeout: 30000,
+          }
         );
 
         const backendProducts = Array.isArray(
@@ -149,7 +176,14 @@ const FeaturedProducts = () => {
           : [];
 
         if (!cancelled) {
-          setProducts(backendProducts.slice(0, 4));
+          const featuredProducts = backendProducts.slice(0, 4);
+
+          setProducts(featuredProducts);
+
+          localStorage.setItem(
+            FEATURED_CACHE_KEY,
+            JSON.stringify(featuredProducts)
+          );
         }
       } catch (error) {
         console.error(
@@ -158,7 +192,7 @@ const FeaturedProducts = () => {
         );
 
         if (!cancelled) {
-          setProducts([]);
+          setProducts(getCachedFeaturedProducts());
         }
       } finally {
         if (!cancelled) {
@@ -200,13 +234,14 @@ const FeaturedProducts = () => {
       loadWishlist
     );
 
-    // Synchronize wishlist changes from another browser tab.
+    // Synchronize changes from another browser tab.
     const handleStorage = (event) => {
       if (
         event.key?.startsWith("mamta_wishlist_") ||
         event.key === "mamta_user" ||
         event.key === "mamta_user_token" ||
-        event.key === "mamta_user_data"
+        event.key === "mamta_user_data" ||
+        event.key === "currentUser"
       ) {
         loadWishlist();
       }
@@ -245,8 +280,7 @@ const FeaturedProducts = () => {
     if (!productId) return false;
 
     return wishlist.some(
-      (item) =>
-        getProductId(item) === String(productId)
+      (item) => getProductId(item) === String(productId)
     );
   };
 
@@ -284,14 +318,12 @@ const FeaturedProducts = () => {
       })();
 
       const exists = currentWishlist.some(
-        (item) =>
-          getProductId(item) === String(productId)
+        (item) => getProductId(item) === String(productId)
       );
 
       const updatedWishlist = exists
         ? currentWishlist.filter(
-            (item) =>
-              getProductId(item) !== String(productId)
+            (item) => getProductId(item) !== String(productId)
           )
         : [...currentWishlist, product];
 
@@ -325,7 +357,7 @@ const FeaturedProducts = () => {
      LOADING
   ======================================================= */
 
-  if (loading) {
+  if (loading && products.length === 0) {
     return (
       <section className="featured-products">
         <div className="featured-container">
@@ -413,11 +445,13 @@ const FeaturedProducts = () => {
                   <div className="product-image">
                     <img
                       src={getProductImage(product)}
-                      alt={product.name || "MAMTA product"}
+                      alt={product.name || "MAAMTA product"}
+                      loading="lazy"
+                      decoding="async"
                       onError={(event) => {
                         event.currentTarget.onerror = null;
                         event.currentTarget.src =
-                          "https://placehold.co/900x900/F4D9DC/4A3032?text=MAMTA";
+                          "https://placehold.co/900x900/F4D9DC/4A3032?text=MAAMTA";
                       }}
                     />
 
