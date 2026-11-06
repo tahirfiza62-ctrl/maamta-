@@ -19,8 +19,7 @@ import "./AdminProducts.css";
    ADMIN PRODUCTS API
 ========================================================= */
 
-const API_URL =
-  "https://mamta-app-8.onrender.com/api/admin/products";
+const API_URL = "https://maamta.onrender.com/api";
 
 
 const AdminProducts = () => {
@@ -72,15 +71,14 @@ const AdminProducts = () => {
         return;
       }
 
-      const response = await axios.get(
-        `${API_URL}/admin/all`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
+    const response = await axios.get(
+  `${API_URL}/admin/products/all`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
       const data = response.data;
 
 
@@ -367,15 +365,14 @@ const AdminProducts = () => {
       }
 
 
-      await axios.delete(
-        `${API_URL}/admin/${id}`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-          },
-        }
-      );
+    await axios.delete(
+  `${API_URL}/admin/products/${id}`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
 
 
       /* REMOVE PRODUCT FROM UI */
