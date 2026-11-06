@@ -23,17 +23,16 @@ import "./ProductReviews.css";
    Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
    CRA:   use process.env.REACT_APP_API_URL instead.
 
-   NOTE: the list endpoint below is GET /api/admin/reviews/all,
-   matching the products router (/all before /:id). The old code
-   called /admin/reviews/admin/all. Confirm which path your
-   backend router really defines and change LIST_URL if needed.
+   NOTE: the list endpoint is GET /api/admin/reviews/admin/all
+   (confirmed by the backend). Edit and delete use
+   /api/admin/reviews/:id.
 ========================================================= */
 
 const API_BASE =
   import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
 
 const REVIEWS_URL = `${API_BASE}/admin/reviews`;
-const LIST_URL = `${REVIEWS_URL}/all`;
+const LIST_URL = `${REVIEWS_URL}/admin/all`;
 
 const TOKEN_KEY = "mamta_admin_token";
 const USER_KEY = "mamta_admin_user";

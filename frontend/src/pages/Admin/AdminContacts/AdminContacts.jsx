@@ -1,6 +1,8 @@
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+
 import {
   Mail,
   Eye,
@@ -15,13 +17,12 @@ import "./AdminContacts.css";
 
 /* =========================================================
    API CONFIGURATION
-   Same base URL as the other admin pages.
-   Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
-   CRA:   use process.env.REACT_APP_API_URL instead.
 ========================================================= */
 
-const API_BASE =
-  import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  "https://maamta.onrender.com/api"
+).replace(/\/+$/, "");
 
 const CONTACTS_URL = `${API_BASE}/admin/contact`;
 
@@ -31,10 +32,12 @@ const USER_KEY = "mamta_admin_user";
 const STATUSES = ["New", "Read", "Replied"];
 
 /* =========================================================
-   HELPERS
+   HELPER FUNCTIONS
 ========================================================= */
 
 const getStatus = (contact) => contact.status || "New";
+
+const getId = (contact) => contact._id || contact.id;
 
 const formatDate = (date) => {
   if (!date) return "N/A";
@@ -52,14 +55,17 @@ const formatDate = (date) => {
   });
 };
 
-const getErrorMessage = (error, fallback) =>
-  error.response?.data?.message ||
-  (error.request && !error.response
-    ? "Cannot reach the server. If it was idle, wait a minute and try again."
-    : fallback);
+const getErrorMessage = (error, fallback) => {
+  return (
+    error.response?.data?.message ||
+    (error.request && !error.response
+      ? "Cannot connect to the server. Please try again."
+      : fallback)
+  );
+};
 
 /* =========================================================
-   ADMIN CONTACTS
+   ADMIN CONTACTS COMPONENT
 ========================================================= */
 
 const AdminContacts = () => {
@@ -72,117 +78,154 @@ const AdminContacts = () => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [busyId, setBusyId] = useState("");
 
-  /* =========================================================
-     AUTH FAILURE
-  ========================================================= */
+  /* =======================================================
+     AUTHENTICATION
+  ======================================================= */
 
   const handleAuthFailure = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    navigate("/admin");
+
+    navigate("/admin", { replace: true });
   }, [navigate]);
 
-  /* =========================================================
-     FETCH CONTACTS (single source of truth)
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+
+    if (!token) {
+      handleAuthFailure();
+      return null;
+    }
+
+    return {
+      Authorization: `Bearer ${token}`,
+    };
+  };
+
+  /* =======================================================
+     FETCH CONTACT MESSAGES
+
      GET /api/admin/contact
-     `isRefresh` shows the small refresh spinner. The initial
-     load uses the loading state, which starts as true.
-  ========================================================= */
+  ======================================================= */
 
   const fetchContacts = useCallback(
-    async (isRefresh = false) => {
+    async (isRefresh = false, signal) => {
       try {
         if (isRefresh) {
           setRefreshing(true);
+        } else {
+          setLoading(true);
         }
 
         setError("");
 
-        const token = localStorage.getItem(TOKEN_KEY);
+        const headers = getAuthHeaders();
 
-        if (!token) {
-          navigate("/admin");
-          return;
-        }
+        if (!headers) return;
 
         const response = await axios.get(CONTACTS_URL, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
+          signal,
         });
 
         const data = response.data;
 
-        setContacts(
-          Array.isArray(data?.contacts)
-            ? data.contacts
-            : Array.isArray(data)
-            ? data
-            : []
-        );
+        const contactList = Array.isArray(data?.contacts)
+          ? data.contacts
+          : Array.isArray(data)
+          ? data
+          : [];
+
+        setContacts(contactList);
+
       } catch (err) {
+        if (
+          err.code === "ERR_CANCELED" ||
+          axios.isCancel(err)
+        ) {
+          return;
+        }
+
         console.error(
           "ADMIN CONTACTS ERROR:",
           err.response?.data || err.message
         );
 
-        const code = err.response?.status;
+        const status = err.response?.status;
 
-        if (code === 401 || code === 403) {
+        if (status === 401 || status === 403) {
           handleAuthFailure();
           return;
         }
 
-        setError(getErrorMessage(err, "Failed to load messages."));
+        setError(
+          getErrorMessage(
+            err,
+            "Unable to load contact messages."
+          )
+        );
+
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (!signal?.aborted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [navigate, handleAuthFailure]
+    [handleAuthFailure]
   );
 
-  /* =========================================================
+  /* =======================================================
      INITIAL LOAD
-  ========================================================= */
+  ======================================================= */
 
   useEffect(() => {
-    fetchContacts();
+    const controller = new AbortController();
+
+    fetchContacts(false, controller.signal);
+
+    return () => {
+      controller.abort();
+    };
   }, [fetchContacts]);
 
-  /* =========================================================
-     UPDATE CONTACT STATUS
+  /* =======================================================
+     UPDATE MESSAGE STATUS
+
      PATCH /api/admin/contact/:id/status
-  ========================================================= */
+  ======================================================= */
 
   const updateStatus = async (id, status) => {
     if (busyId) return;
 
-    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = getAuthHeaders();
 
-    if (!token) {
-      navigate("/admin");
-      return;
-    }
+    if (!headers) return;
 
     try {
       setBusyId(id);
+      setError("");
 
       await axios.patch(
         `${CONTACTS_URL}/${id}/status`,
         { status },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers }
       );
 
-      setContacts((previousContacts) =>
-        previousContacts.map((contact) =>
-          contact._id === id ? { ...contact, status } : contact
+      setContacts((previous) =>
+        previous.map((contact) =>
+          getId(contact) === id
+            ? { ...contact, status }
+            : contact
         )
       );
 
-      setSelectedContact((previousContact) =>
-        previousContact?._id === id
-          ? { ...previousContact, status }
-          : previousContact
+      setSelectedContact((previous) =>
+        previous && getId(previous) === id
+          ? { ...previous, status }
+          : previous
       );
+
     } catch (err) {
       console.error(
         "UPDATE CONTACT STATUS ERROR:",
@@ -196,47 +239,59 @@ const AdminContacts = () => {
         return;
       }
 
-      alert(getErrorMessage(err, "Unable to update message status."));
+      alert(
+        getErrorMessage(
+          err,
+          "Unable to update message status."
+        )
+      );
+
     } finally {
       setBusyId("");
     }
   };
 
-  /* =========================================================
-     DELETE CONTACT
+  /* =======================================================
+     DELETE CONTACT MESSAGE
+
      DELETE /api/admin/contact/:id
-  ========================================================= */
+  ======================================================= */
 
   const deleteContact = async (id) => {
     if (busyId) return;
 
     const confirmed = window.confirm(
-      "Are you sure you want to delete this message? This action cannot be undone."
+      "Are you sure you want to delete this message?"
     );
 
     if (!confirmed) return;
 
-    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = getAuthHeaders();
 
-    if (!token) {
-      navigate("/admin");
-      return;
-    }
+    if (!headers) return;
 
     try {
       setBusyId(id);
 
-      await axios.delete(`${CONTACTS_URL}/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      setContacts((previousContacts) =>
-        previousContacts.filter((contact) => contact._id !== id)
+      await axios.delete(
+        `${CONTACTS_URL}/${id}`,
+        { headers }
       );
 
-      setSelectedContact((previousContact) =>
-        previousContact?._id === id ? null : previousContact
+      setContacts((previous) =>
+        previous.filter(
+          (contact) => getId(contact) !== id
+        )
       );
+
+      setSelectedContact((previous) =>
+        previous && getId(previous) === id
+          ? null
+          : previous
+      );
+
+      alert("Message deleted successfully.");
+
     } catch (err) {
       console.error(
         "DELETE CONTACT ERROR:",
@@ -250,42 +305,58 @@ const AdminContacts = () => {
         return;
       }
 
-      alert(getErrorMessage(err, "Unable to delete message."));
+      alert(
+        getErrorMessage(
+          err,
+          "Unable to delete message."
+        )
+      );
+
     } finally {
       setBusyId("");
     }
   };
 
-  /* =========================================================
+  /* =======================================================
      STATISTICS
-  ========================================================= */
+  ======================================================= */
 
-  const stats = useMemo(
-    () => ({
-      total: contacts.length,
-      new: contacts.filter((contact) => getStatus(contact) === "New").length,
-      read: contacts.filter((contact) => getStatus(contact) === "Read").length,
-      replied: contacts.filter((contact) => getStatus(contact) === "Replied")
-        .length,
-    }),
-    [contacts]
-  );
+  const stats = useMemo(() => ({
+    total: contacts.length,
 
-  /* =========================================================
-     RETURN
-  ========================================================= */
+    new: contacts.filter(
+      (contact) => getStatus(contact) === "New"
+    ).length,
+
+    read: contacts.filter(
+      (contact) => getStatus(contact) === "Read"
+    ).length,
+
+    replied: contacts.filter(
+      (contact) => getStatus(contact) === "Replied"
+    ).length,
+
+  }), [contacts]);
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <div className="admin-contacts">
+
       {/* HEADER */}
 
       <div className="admin-contacts-header">
+
         <div>
           <span>CUSTOMER COMMUNICATION</span>
 
           <h1>Contact Messages</h1>
 
-          <p>Manage messages received from MAMTA customers.</p>
+          <p>
+            Manage messages received from MAMTA customers.
+          </p>
         </div>
 
         <button
@@ -294,9 +365,16 @@ const AdminContacts = () => {
           onClick={() => fetchContacts(true)}
           disabled={loading || refreshing}
         >
-          <RefreshCw size={17} className={refreshing ? "refresh-spinning" : ""} />
+          <RefreshCw
+            size={17}
+            className={
+              refreshing ? "refresh-spinning" : ""
+            }
+          />
+
           {refreshing ? "Refreshing..." : "Refresh"}
         </button>
+
       </div>
 
       {/* ERROR */}
@@ -310,6 +388,7 @@ const AdminContacts = () => {
       {/* STATISTICS */}
 
       <div className="contacts-stats">
+
         <div className="contact-stat-card">
           <div className="contact-stat-icon">
             <MessageCircle size={19} />
@@ -353,36 +432,54 @@ const AdminContacts = () => {
             <strong>{stats.replied}</strong>
           </div>
         </div>
+
       </div>
 
       {/* CONTACT CONTENT */}
 
       <div className="contacts-layout">
+
         {/* MESSAGE LIST */}
 
         <div className="contacts-list">
+
           <div className="contacts-list-header">
             <h2>Messages</h2>
             <span>{contacts.length}</span>
           </div>
 
           {loading ? (
-            <div className="contacts-loading">Loading messages...</div>
+
+            <div className="contacts-loading">
+              Loading messages...
+            </div>
+
           ) : contacts.length === 0 ? (
+
             <div className="contacts-empty">
+
               <Mail size={34} />
 
-              <h3>{error ? "Unable to load messages" : "No messages yet"}</h3>
+              <h3>
+                {error
+                  ? "Unable to load messages"
+                  : "No messages yet"}
+              </h3>
 
               <p>
                 {error
                   ? "Press Refresh to try again."
                   : "Customer messages will appear here."}
               </p>
+
             </div>
+
           ) : (
+
             <div className="contacts-table-wrapper">
+
               <table className="contacts-table">
+
                 <thead>
                   <tr>
                     <th>CUSTOMER</th>
@@ -394,24 +491,41 @@ const AdminContacts = () => {
                 </thead>
 
                 <tbody>
+
                   {contacts.map((contact) => {
+                    const id = getId(contact);
                     const status = getStatus(contact);
-                    const busy = busyId === contact._id;
+                    const busy = busyId === id;
 
                     return (
-                      <tr key={contact._id}>
+
+                      <tr key={id}>
+
+                        {/* CUSTOMER */}
+
                         <td>
                           <div className="customer-cell">
+
                             <div className="customer-avatar">
-                              {contact.name?.charAt(0)?.toUpperCase() || "C"}
+                              {contact.name
+                                ?.charAt(0)
+                                ?.toUpperCase() || "C"}
                             </div>
 
                             <div>
-                              <strong>{contact.name || "Unknown"}</strong>
-                              <span>{contact.email || "No email"}</span>
+                              <strong>
+                                {contact.name || "Unknown"}
+                              </strong>
+
+                              <span>
+                                {contact.email || "No email"}
+                              </span>
                             </div>
+
                           </div>
                         </td>
+
+                        {/* SUBJECT */}
 
                         <td>
                           <span className="subject-cell">
@@ -419,11 +533,15 @@ const AdminContacts = () => {
                           </span>
                         </td>
 
+                        {/* DATE */}
+
                         <td>
                           <span className="date-cell">
                             {formatDate(contact.createdAt)}
                           </span>
                         </td>
+
+                        {/* STATUS */}
 
                         <td>
                           <span
@@ -433,11 +551,16 @@ const AdminContacts = () => {
                           </span>
                         </td>
 
+                        {/* ACTIONS */}
+
                         <td>
                           <div className="contact-actions">
+
                             <button
                               type="button"
-                              onClick={() => setSelectedContact(contact)}
+                              onClick={() =>
+                                setSelectedContact(contact)
+                              }
                               title="View message"
                               aria-label="View message"
                             >
@@ -447,42 +570,62 @@ const AdminContacts = () => {
                             <button
                               type="button"
                               className="delete"
-                              onClick={() => deleteContact(contact._id)}
-                              disabled={busy}
+                              onClick={() => deleteContact(id)}
+                              disabled={busy || Boolean(busyId)}
                               title="Delete message"
                               aria-label="Delete message"
                             >
                               <Trash2 size={16} />
                             </button>
+
                           </div>
                         </td>
+
                       </tr>
                     );
                   })}
+
                 </tbody>
+
               </table>
+
             </div>
           )}
+
         </div>
 
         {/* MESSAGE DETAILS */}
 
         <div className="contact-details">
+
           {!selectedContact ? (
+
             <div className="contact-details-empty">
+
               <MessageCircle size={38} />
 
               <h3>Select a message</h3>
 
-              <p>Click the eye icon to view customer details.</p>
+              <p>
+                Click the eye icon to view customer details.
+              </p>
+
             </div>
+
           ) : (
+
             <>
+
+              {/* DETAILS HEADER */}
+
               <div className="contact-details-header">
+
                 <div>
                   <span>MESSAGE DETAILS</span>
 
-                  <h2>{selectedContact.subject || "No subject"}</h2>
+                  <h2>
+                    {selectedContact.subject || "No subject"}
+                  </h2>
                 </div>
 
                 <button
@@ -492,15 +635,24 @@ const AdminContacts = () => {
                 >
                   ×
                 </button>
+
               </div>
 
+              {/* CUSTOMER DETAILS */}
+
               <div className="contact-customer-details">
+
                 <div className="detail-avatar">
-                  {selectedContact.name?.charAt(0)?.toUpperCase() || "C"}
+                  {selectedContact.name
+                    ?.charAt(0)
+                    ?.toUpperCase() || "C"}
                 </div>
 
                 <div>
-                  <strong>{selectedContact.name || "Unknown"}</strong>
+
+                  <strong>
+                    {selectedContact.name || "Unknown"}
+                  </strong>
 
                   {selectedContact.email && (
                     <a href={`mailto:${selectedContact.email}`}>
@@ -513,50 +665,87 @@ const AdminContacts = () => {
                       {selectedContact.phone}
                     </a>
                   )}
+
                 </div>
+
               </div>
+
+              {/* MESSAGE */}
 
               <div className="contact-message-box">
+
                 <span>MESSAGE</span>
 
-                <p>{selectedContact.message}</p>
+                <p>
+                  {selectedContact.message || "No message content."}
+                </p>
+
               </div>
 
+              {/* MESSAGE DATE AND STATUS */}
+
               <div className="contact-message-meta">
+
                 <div>
                   <Clock size={16} />
 
-                  <span>{formatDate(selectedContact.createdAt)}</span>
+                  <span>
+                    {formatDate(selectedContact.createdAt)}
+                  </span>
                 </div>
 
                 <div>
                   <span>Status:</span>
 
-                  <strong>{getStatus(selectedContact)}</strong>
+                  <strong>
+                    {getStatus(selectedContact)}
+                  </strong>
                 </div>
+
               </div>
 
+              {/* UPDATE STATUS */}
+
               <div className="contact-status-actions">
+
                 <span>UPDATE STATUS</span>
 
                 <div>
+
                   {STATUSES.map((status) => (
+
                     <button
                       key={status}
                       type="button"
                       className={
-                        getStatus(selectedContact) === status ? "selected" : ""
+                        getStatus(selectedContact) === status
+                          ? "selected"
+                          : ""
                       }
-                      disabled={busyId === selectedContact._id}
-                      onClick={() => updateStatus(selectedContact._id, status)}
+                      disabled={
+                        Boolean(busyId) ||
+                        getStatus(selectedContact) === status
+                      }
+                      onClick={() =>
+                        updateStatus(
+                          getId(selectedContact),
+                          status
+                        )
+                      }
                     >
                       {status}
                     </button>
+
                   ))}
+
                 </div>
+
               </div>
 
+              {/* EMAIL REPLY */}
+
               {selectedContact.email && (
+
                 <a
                   href={`mailto:${selectedContact.email}?subject=${encodeURIComponent(
                     `Re: ${selectedContact.subject || "Your message"}`
@@ -566,21 +755,31 @@ const AdminContacts = () => {
                   <Mail size={17} />
                   Reply via Email
                 </a>
+
               )}
+
+              {/* DELETE */}
 
               <button
                 type="button"
                 className="contact-delete-button"
-                disabled={busyId === selectedContact._id}
-                onClick={() => deleteContact(selectedContact._id)}
+                disabled={Boolean(busyId)}
+                onClick={() =>
+                  deleteContact(getId(selectedContact))
+                }
               >
                 <Trash2 size={16} />
                 Delete Message
               </button>
+
             </>
+
           )}
+
         </div>
+
       </div>
+
     </div>
   );
 };
