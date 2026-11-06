@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -10,6 +11,12 @@ import {
 } from "lucide-react";
 
 import "./Wishlist.css";
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+const GUEST_CART_KEY = "mamta_guest_cart";
 
 /* =========================================================
    HELPERS
@@ -35,17 +42,41 @@ const getUserIdentifier = (user) => {
   return user._id || user.id || user.email || null;
 };
 
+/*
+  Each account gets a separate wishlist key.
+
+  Example:
+  mamta_wishlist_12345
+  mamta_wishlist_67890
+*/
+
+const getWishlistKey = (userId) => {
+  if (!userId) return null;
+
+  return `mamta_wishlist_${encodeURIComponent(
+    String(userId).toLowerCase()
+  )}`;
+};
+
 const getProductId = (product) => {
-  return product?._id || product?.id || null;
+  return product?._id || product?.id || product?.productId || null;
 };
 
 const getProductImage = (product) => {
-  if (product?.image) {
+  if (typeof product?.image === "string" && product.image) {
     return product.image;
   }
 
   if (Array.isArray(product?.images) && product.images.length > 0) {
-    return product.images[0];
+    const firstImage = product.images[0];
+
+    if (typeof firstImage === "string") {
+      return firstImage;
+    }
+
+    if (firstImage?.url) {
+      return firstImage.url;
+    }
   }
 
   return "/placeholder-product.jpg";
@@ -62,29 +93,22 @@ const getRating = (product) => {
 };
 
 /* =========================================================
-   WISHLIST
+   WISHLIST COMPONENT
 ========================================================= */
 
 const Wishlist = () => {
   const navigate = useNavigate();
 
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
-
-  const userId = getUserIdentifier(currentUser);
-
-  /*
-    IMPORTANT:
-    Shop.jsx also uses exactly this key.
-    Do NOT make this user-specific here.
-  */
-  const wishlistKey = "mamta_wishlist";
-
   const [wishlist, setWishlist] = useState([]);
   const [cart, setCart] = useState([]);
 
+  const userId = getUserIdentifier(currentUser);
+  const wishlistKey = getWishlistKey(userId);
+
   /* =======================================================
-     REFRESH USER
-  ======================================================= */
+     REFRESH USER AFTER LOGIN / LOGOUT
+  ======================================================== */
 
   useEffect(() => {
     const refreshUser = () => {
@@ -92,19 +116,22 @@ const Wishlist = () => {
     };
 
     window.addEventListener("storage", refreshUser);
+    window.addEventListener("authChanged", refreshUser);
     window.addEventListener("authUpdated", refreshUser);
 
     return () => {
       window.removeEventListener("storage", refreshUser);
+      window.removeEventListener("authChanged", refreshUser);
       window.removeEventListener("authUpdated", refreshUser);
     };
   }, []);
 
   /* =======================================================
-     LOAD WISHLIST
-  ======================================================= */
+     LOAD USER-SPECIFIC WISHLIST
+  ======================================================== */
 
   useEffect(() => {
+    // Logged out: show no wishlist
     if (!wishlistKey) {
       setWishlist([]);
       return;
@@ -112,10 +139,13 @@ const Wishlist = () => {
 
     const loadWishlist = () => {
       try {
-        const savedWishlist =
-          JSON.parse(localStorage.getItem(wishlistKey)) || [];
+        const savedWishlist = JSON.parse(
+          localStorage.getItem(wishlistKey) || "[]"
+        );
 
-        setWishlist(Array.isArray(savedWishlist) ? savedWishlist : []);
+        setWishlist(
+          Array.isArray(savedWishlist) ? savedWishlist : []
+        );
       } catch (error) {
         console.error("Failed to load wishlist:", error);
         setWishlist([]);
@@ -135,15 +165,22 @@ const Wishlist = () => {
 
   /* =======================================================
      LOAD CART
-  ======================================================= */
+  ======================================================== */
 
   useEffect(() => {
     const loadCart = () => {
       try {
-        const savedCart =
-          JSON.parse(localStorage.getItem("mamta_cart")) || [];
+        const savedCart = JSON.parse(
+          localStorage.getItem(GUEST_CART_KEY) || "[]"
+        );
 
-        setCart(Array.isArray(savedCart) ? savedCart : []);
+        const cartItems = Array.isArray(savedCart)
+          ? savedCart
+          : Array.isArray(savedCart?.items)
+            ? savedCart.items
+            : [];
+
+        setCart(cartItems);
       } catch (error) {
         console.error("Failed to load cart:", error);
         setCart([]);
@@ -165,11 +202,14 @@ const Wishlist = () => {
 
   /* =======================================================
      REMOVE FROM WISHLIST
-  ======================================================= */
+  ======================================================== */
 
   const removeFromWishlist = (productId) => {
+    if (!wishlistKey) return;
+
     const updatedWishlist = wishlist.filter(
-      (item) => String(getProductId(item)) !== String(productId)
+      (item) =>
+        String(getProductId(item)) !== String(productId)
     );
 
     setWishlist(updatedWishlist);
@@ -183,8 +223,8 @@ const Wishlist = () => {
   };
 
   /* =======================================================
-     ADD TO CART
-  ======================================================= */
+     ADD TO GUEST CART
+  ======================================================== */
 
   const addToCart = (product) => {
     const productId = getProductId(product);
@@ -193,45 +233,51 @@ const Wishlist = () => {
       return;
     }
 
-    const existingItem = cart.find(
-      (item) =>
-        String(getProductId(item)) === String(productId)
-    );
+    let guestCart = [];
 
-    let updatedCart;
-
-    if (existingItem) {
-      updatedCart = cart.map((item) =>
-        String(getProductId(item)) === String(productId)
-          ? {
-              ...item,
-
-              /*
-                FIXED:
-                Parentheses are important here.
-              */
-              quantity:
-                (Number(item.quantity) || 1) + 1,
-            }
-          : item
+    try {
+      const savedCart = JSON.parse(
+        localStorage.getItem(GUEST_CART_KEY) || "[]"
       );
-    } else {
-      updatedCart = [
-        ...cart,
-        {
-          ...product,
-          _id: productId,
-          quantity: 1,
-        },
-      ];
+
+      guestCart = Array.isArray(savedCart)
+        ? savedCart
+        : Array.isArray(savedCart?.items)
+          ? savedCart.items
+          : [];
+    } catch (error) {
+      console.error("Failed to read cart:", error);
     }
 
-    setCart(updatedCart);
+    const existingItem = guestCart.find(
+      (item) =>
+        String(item.productId || item._id || item.id) ===
+          String(productId) &&
+        String(item.color || "") === ""
+    );
+
+    if (existingItem) {
+      existingItem.quantity =
+        (Number(existingItem.quantity) || 1) + 1;
+    } else {
+      guestCart.push({
+        productId: String(productId),
+        name: product.name || product.title || "",
+        image: getProductImage(product),
+        price: Number(product.price || 0),
+        quantity: 1,
+        color: "",
+        colorCode: "",
+        colorImage: "",
+      });
+    }
 
     localStorage.setItem(
-      "mamta_cart",
-      JSON.stringify(updatedCart)
+      GUEST_CART_KEY,
+      JSON.stringify(guestCart)
     );
+
+    setCart(guestCart);
 
     window.dispatchEvent(new Event("cartUpdated"));
     window.dispatchEvent(new Event("cartChanged"));
@@ -239,17 +285,19 @@ const Wishlist = () => {
 
   /* =======================================================
      MOVE TO CART
-  ======================================================= */
+  ======================================================== */
 
   const moveToCart = (product) => {
     addToCart(product);
   };
 
   /* =======================================================
-     CLEAR WISHLIST
-  ======================================================= */
+     CLEAR CURRENT USER'S WISHLIST
+  ======================================================== */
 
   const clearWishlist = () => {
+    if (!wishlistKey) return;
+
     setWishlist([]);
 
     localStorage.setItem(
@@ -262,14 +310,17 @@ const Wishlist = () => {
 
   /* =======================================================
      LOGGED OUT
-  ======================================================= */
+  ======================================================== */
 
   if (!currentUser || !userId) {
     return (
       <main className="mamta-wishlist-page">
+
         <section className="wishlist-hero">
           <div className="wishlist-container">
+
             <div className="wishlist-hero-content">
+
               <div className="wishlist-hero-icon">
                 <Heart size={28} />
               </div>
@@ -284,13 +335,17 @@ const Wishlist = () => {
                 Sign in to save your favorite Mamta products
                 and keep them close for later.
               </p>
+
             </div>
+
           </div>
         </section>
 
         <section className="wishlist-section">
           <div className="wishlist-container">
+
             <div className="wishlist-empty">
+
               <div className="wishlist-empty-heart">
                 <Heart size={42} />
               </div>
@@ -298,8 +353,8 @@ const Wishlist = () => {
               <h2>Sign in to view your wishlist</h2>
 
               <p>
-                Your saved products will appear here once
-                you sign in to your Mamta account.
+                Sign in to your account to see your
+                personally saved products.
               </p>
 
               <button
@@ -309,23 +364,24 @@ const Wishlist = () => {
                 Sign In
                 <ArrowRight size={17} />
               </button>
+
             </div>
+
           </div>
         </section>
+
       </main>
     );
   }
 
   /* =======================================================
      MAIN WISHLIST
-  ======================================================= */
+  ======================================================== */
 
   return (
     <main className="mamta-wishlist-page">
 
-      {/* ===================================================
-          HERO
-      =================================================== */}
+      {/* HERO */}
 
       <section className="wishlist-hero">
         <div className="wishlist-container">
@@ -358,16 +414,12 @@ const Wishlist = () => {
         </div>
       </section>
 
-      {/* ===================================================
-          WISHLIST SECTION
-      =================================================== */}
+      {/* WISHLIST SECTION */}
 
       <section className="wishlist-section">
         <div className="wishlist-container">
 
-          {/* =================================================
-              CONTENT HEADER
-          ================================================= */}
+          {/* CONTENT HEADER */}
 
           <div className="wishlist-content-header">
 
@@ -399,9 +451,7 @@ const Wishlist = () => {
 
           </div>
 
-          {/* =================================================
-              EMPTY STATE
-          ================================================= */}
+          {/* EMPTY STATE */}
 
           {wishlist.length === 0 ? (
             <div className="wishlist-empty">
@@ -428,9 +478,7 @@ const Wishlist = () => {
             </div>
           ) : (
 
-            /* =================================================
-               PRODUCTS
-            ================================================= */
+            /* PRODUCTS */
 
             <div className="wishlist-grid">
 
@@ -445,15 +493,11 @@ const Wishlist = () => {
                     key={productId}
                   >
 
-                    {/* =======================================
-                        PRODUCT IMAGE
-                    ======================================= */}
+                    {/* PRODUCT IMAGE */}
 
                     <div className="wishlist-product-image">
 
-                      <Link
-                        to={`/product/${productId}`}
-                      >
+                      <Link to={`/product/${productId}`}>
                         <img
                           src={image}
                           alt={
@@ -461,6 +505,11 @@ const Wishlist = () => {
                             item.title ||
                             "Mamta product"
                           }
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src =
+                              "/placeholder-product.jpg";
+                          }}
                         />
                       </Link>
 
@@ -487,30 +536,25 @@ const Wishlist = () => {
 
                     </div>
 
-                    {/* =======================================
-                        PRODUCT INFO
-                    ======================================= */}
+                    {/* PRODUCT INFO */}
 
                     <div className="wishlist-product-info">
 
                       <span className="wishlist-product-category">
-                        {item.category ||
-                          "Mamta Collection"}
+                        {typeof item.category === "object"
+                          ? item.category?.name || "Mamta Collection"
+                          : item.category || "Mamta Collection"}
                       </span>
 
                       <h3>
-                        <Link
-                          to={`/product/${productId}`}
-                        >
+                        <Link to={`/product/${productId}`}>
                           {item.name ||
                             item.title ||
                             "Mamta Product"}
                         </Link>
                       </h3>
 
-                      {/* =====================================
-                          RATING
-                      ===================================== */}
+                      {/* RATING */}
 
                       <div className="wishlist-product-rating">
 
@@ -534,9 +578,7 @@ const Wishlist = () => {
 
                       </div>
 
-                      {/* =====================================
-                          PRICE
-                      ===================================== */}
+                      {/* PRICE */}
 
                       <div className="wishlist-product-price">
 
@@ -569,17 +611,13 @@ const Wishlist = () => {
 
                       </div>
 
-                      {/* =====================================
-                          ACTIONS
-                      ===================================== */}
+                      {/* ACTIONS */}
 
                       <div className="wishlist-product-actions">
 
                         <button
                           className="wishlist-cart-btn"
-                          onClick={() =>
-                            moveToCart(item)
-                          }
+                          onClick={() => moveToCart(item)}
                         >
                           <ShoppingBag size={16} />
                           Add to Cart
