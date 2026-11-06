@@ -1,5 +1,5 @@
-
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import {
@@ -19,21 +19,38 @@ import "./ProductReviews.css";
 
 /* =========================================================
    API CONFIGURATION
+   Same base URL as the other admin pages.
+   Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
+   CRA:   use process.env.REACT_APP_API_URL instead.
+
+   NOTE: the list endpoint below is GET /api/admin/reviews/all,
+   matching the products router (/all before /:id). The old code
+   called /admin/reviews/admin/all. Confirm which path your
+   backend router really defines and change LIST_URL if needed.
 ========================================================= */
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
+
+const REVIEWS_URL = `${API_BASE}/admin/reviews`;
+const LIST_URL = `${REVIEWS_URL}/all`;
+
+const TOKEN_KEY = "mamta_admin_token";
+const USER_KEY = "mamta_admin_user";
+const REQUEST_TIMEOUT = 15000;
 
 /* =========================================================
    HELPERS
 ========================================================= */
 
 const getAdminHeaders = () => {
-  const token = localStorage.getItem("mamta_admin_token");
+  const token = localStorage.getItem(TOKEN_KEY);
 
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
+
+const isAuthError = (error) =>
+  error.response?.status === 401 || error.response?.status === 403;
 
 const getReviews = (data) => {
   if (Array.isArray(data)) return data;
@@ -42,12 +59,21 @@ const getReviews = (data) => {
   return [];
 };
 
-const getErrorMessage = (error) =>
-  error.response?.status === 401 || error.response?.status === 403
-    ? "Admin authentication failed. Please sign in again."
-    : error.response?.data?.message ||
-      error.message ||
-      "Something went wrong.";
+const getErrorMessage = (error) => {
+  if (isAuthError(error)) {
+    return "Admin authentication failed. Please sign in again.";
+  }
+
+  if (error.response?.data?.message) {
+    return error.response.data.message;
+  }
+
+  if (error.request && !error.response) {
+    return "Cannot reach the server. If it was idle, wait a minute and try again.";
+  }
+
+  return error.message || "Something went wrong.";
+};
 
 const formatDate = (date) => {
   if (!date) return "Date unavailable";
@@ -76,6 +102,11 @@ const getProductName = (review) => {
 
   return "General testimonial";
 };
+
+const getReviewText = (review) =>
+  review.message || review.text || review.review || "";
+
+const getReviewCity = (review) => review.city || review.place || "";
 
 const emptyForm = {
   name: "",
@@ -111,9 +142,12 @@ function RatingStars({ rating }) {
 ========================================================= */
 
 export default function Reviews() {
+  const navigate = useNavigate();
+
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
@@ -124,36 +158,59 @@ export default function Reviews() {
   const [formData, setFormData] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
 
-  /* =======================================================
-     INITIAL LOAD
-
-     The request is awaited before state is updated.
-     This avoids synchronously calling a state-updating
-     function directly from the effect.
-  ======================================================= */
+  /* Prevents state updates after the page is left */
+  const mounted = useRef(true);
 
   useEffect(() => {
-    let active = true;
+    mounted.current = true;
 
-    const loadInitialReviews = async () => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /* =======================================================
+     AUTH FAILURE
+  ======================================================= */
+
+  const handleAuthFailure = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    navigate("/admin");
+  }, [navigate]);
+
+  /* =======================================================
+     FETCH REVIEWS (single source of truth)
+     `isRefresh` shows the small refresh spinner. The initial
+     load uses the full-page loader, which starts as true.
+  ======================================================= */
+
+  const fetchReviews = useCallback(
+    async (isRefresh = false) => {
+      if (!localStorage.getItem(TOKEN_KEY)) {
+        navigate("/admin");
+        return;
+      }
+
+      if (isRefresh) {
+        setRefreshing(true);
+      }
+
       try {
-        const response = await axios.get(
-          `${API_URL}/admin/reviews/admin/all`,
-          {
-            headers: getAdminHeaders(),
-            timeout: 15000,
-          }
-        );
+        const response = await axios.get(LIST_URL, {
+          headers: getAdminHeaders(),
+          timeout: REQUEST_TIMEOUT,
+        });
 
         if (response.data?.success === false) {
-          throw new Error(
-            response.data.message || "Unable to load reviews."
-          );
+          throw new Error(response.data.message || "Unable to load reviews.");
         }
 
-        if (active) {
+        if (mounted.current) {
           setReviews(getReviews(response.data));
+          setLoadError("");
         }
       } catch (error) {
         console.error(
@@ -161,61 +218,36 @@ export default function Reviews() {
           error.response?.data || error.message
         );
 
-        if (active) {
-          setReviews([]);
-          toast.error(getErrorMessage(error));
+        if (!mounted.current) {
+          return;
         }
+
+        if (isAuthError(error)) {
+          handleAuthFailure();
+          return;
+        }
+
+        const message = getErrorMessage(error);
+
+        setLoadError(message);
+        toast.error(message);
       } finally {
-        if (active) {
+        if (mounted.current) {
           setLoading(false);
+          setRefreshing(false);
         }
       }
-    };
-
-    loadInitialReviews();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    },
+    [navigate, handleAuthFailure]
+  );
 
   /* =======================================================
-     REFRESH REVIEWS
-
-     Used by the Refresh buttons and after edits when
-     the server does not return the updated review.
+     INITIAL LOAD
   ======================================================= */
 
-  const fetchReviews = useCallback(async () => {
-    setRefreshing(true);
-
-    try {
-      const response = await axios.get(
-        `${API_URL}/admin/reviews/admin/all`,
-        {
-          headers: getAdminHeaders(),
-          timeout: 15000,
-        }
-      );
-
-      if (response.data?.success === false) {
-        throw new Error(
-          response.data.message || "Unable to load reviews."
-        );
-      }
-
-      setReviews(getReviews(response.data));
-    } catch (error) {
-      console.error(
-        "REFRESH REVIEWS ERROR:",
-        error.response?.data || error.message
-      );
-
-      toast.error(getErrorMessage(error));
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  useEffect(() => {
+    fetchReviews(false);
+  }, [fetchReviews]);
 
   /* =======================================================
      STATISTICS
@@ -250,19 +282,21 @@ export default function Reviews() {
     const query = search.trim().toLowerCase();
 
     return reviews.filter((review) => {
-      const productName = getProductName(review);
-
       const matchesSearch =
         !query ||
         [
           review.name,
           review.city,
+          review.place,
           review.message,
           review.text,
+          review.review,
           review.email,
-          productName,
+          getProductName(review),
         ].some((value) =>
-          String(value || "").toLowerCase().includes(query)
+          String(value || "")
+            .toLowerCase()
+            .includes(query)
         );
 
       const matchesRating =
@@ -276,25 +310,12 @@ export default function Reviews() {
 
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "approved" &&
-          review.approved !== false) ||
-        (statusFilter === "pending" &&
-          review.approved === false);
+        (statusFilter === "approved" && review.approved !== false) ||
+        (statusFilter === "pending" && review.approved === false);
 
-      return (
-        matchesSearch &&
-        matchesRating &&
-        matchesType &&
-        matchesStatus
-      );
+      return matchesSearch && matchesRating && matchesType && matchesStatus;
     });
-  }, [
-    reviews,
-    search,
-    ratingFilter,
-    typeFilter,
-    statusFilter,
-  ]);
+  }, [reviews, search, ratingFilter, typeFilter, statusFilter]);
 
   /* =======================================================
      EDIT REVIEW
@@ -305,19 +326,36 @@ export default function Reviews() {
 
     setFormData({
       name: review.name || "",
-      city: review.city || review.place || "",
+      city: getReviewCity(review),
       rating: Number(review.rating) || 5,
-      message: review.message || review.text || review.review || "",
+      message: getReviewText(review),
       approved: review.approved !== false,
     });
   };
 
-  const closeEdit = () => {
+  const closeEdit = useCallback(() => {
     if (saving) return;
 
     setEditingReview(null);
     setFormData({ ...emptyForm });
-  };
+  }, [saving]);
+
+  /* Close the edit dialog with the Escape key */
+  useEffect(() => {
+    if (!editingReview) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeEdit();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [editingReview, closeEdit]);
 
   const handleFormChange = (event) => {
     const { name, value } = event.target;
@@ -329,11 +367,36 @@ export default function Reviews() {
   };
 
   /* =======================================================
+     APPLY UPDATED REVIEW
+     Uses the server's copy when it returns one; otherwise
+     reloads the list.
+  ======================================================= */
+
+  const applyUpdatedReview = async (response) => {
+    const updatedReview = response.data?.review;
+
+    if (updatedReview?._id) {
+      setReviews((previous) =>
+        previous.map((review) =>
+          review._id === updatedReview._id
+            ? { ...review, ...updatedReview }
+            : review
+        )
+      );
+    } else {
+      await fetchReviews(true);
+    }
+  };
+
+  /* =======================================================
      SAVE REVIEW
+     PUT /api/admin/reviews/:id
   ======================================================= */
 
   const handleSave = async (event) => {
     event.preventDefault();
+
+    if (saving) return;
 
     if (!editingReview?._id) {
       toast.error("Review ID is missing.");
@@ -369,7 +432,7 @@ export default function Reviews() {
 
     try {
       const response = await axios.put(
-        `${API_URL}/admin/reviews/${editingReview._id}`,
+        `${REVIEWS_URL}/${editingReview._id}`,
         {
           name,
           city,
@@ -379,29 +442,15 @@ export default function Reviews() {
         },
         {
           headers: getAdminHeaders(),
-          timeout: 15000,
+          timeout: REQUEST_TIMEOUT,
         }
       );
 
       if (response.data?.success === false) {
-        throw new Error(
-          response.data.message || "Unable to update review."
-        );
+        throw new Error(response.data.message || "Unable to update review.");
       }
 
-      const updatedReview = response.data?.review;
-
-      if (updatedReview?._id) {
-        setReviews((previous) =>
-          previous.map((review) =>
-            review._id === updatedReview._id
-              ? { ...review, ...updatedReview }
-              : review
-          )
-        );
-      } else {
-        await fetchReviews();
-      }
+      await applyUpdatedReview(response);
 
       setEditingReview(null);
       setFormData({ ...emptyForm });
@@ -412,14 +461,22 @@ export default function Reviews() {
         error.response?.data || error.message
       );
 
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+
       toast.error(getErrorMessage(error));
     } finally {
-      setSaving(false);
+      if (mounted.current) {
+        setSaving(false);
+      }
     }
   };
 
   /* =======================================================
      DELETE REVIEW
+     DELETE /api/admin/reviews/:id
   ======================================================= */
 
   const handleDelete = async (review) => {
@@ -429,7 +486,9 @@ export default function Reviews() {
     }
 
     const confirmed = window.confirm(
-      `Delete the review from ${review.name || "this customer"}? This action cannot be undone.`
+      `Delete the review from ${
+        review.name || "this customer"
+      }? This action cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -437,18 +496,13 @@ export default function Reviews() {
     setDeletingId(review._id);
 
     try {
-      const response = await axios.delete(
-        `${API_URL}/admin/reviews/${review._id}`,
-        {
-          headers: getAdminHeaders(),
-          timeout: 15000,
-        }
-      );
+      const response = await axios.delete(`${REVIEWS_URL}/${review._id}`, {
+        headers: getAdminHeaders(),
+        timeout: REQUEST_TIMEOUT,
+      });
 
       if (response.data?.success === false) {
-        throw new Error(
-          response.data.message || "Unable to delete review."
-        );
+        throw new Error(response.data.message || "Unable to delete review.");
       }
 
       setReviews((previous) =>
@@ -467,62 +521,57 @@ export default function Reviews() {
         error.response?.data || error.message
       );
 
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+
       toast.error(getErrorMessage(error));
     } finally {
-      setDeletingId(null);
+      if (mounted.current) {
+        setDeletingId(null);
+      }
     }
   };
 
   /* =======================================================
      APPROVE / HIDE REVIEW
+     PUT /api/admin/reviews/:id
   ======================================================= */
 
   const toggleApproval = async (review) => {
+    if (!review?._id || togglingId) return;
+
+    const nextApproved = review.approved === false;
+
+    setTogglingId(review._id);
+
     try {
       const response = await axios.put(
-        `${API_URL}/admin/reviews/${review._id}`,
+        `${REVIEWS_URL}/${review._id}`,
         {
           name: review.name,
-          city: review.city || review.place || "",
+          city: getReviewCity(review),
           rating: Number(review.rating),
-          message:
-            review.message ||
-            review.text ||
-            review.review ||
-            "",
-          approved: review.approved === false,
+          message: getReviewText(review),
+          approved: nextApproved,
         },
         {
           headers: getAdminHeaders(),
-          timeout: 15000,
+          timeout: REQUEST_TIMEOUT,
         }
       );
 
       if (response.data?.success === false) {
         throw new Error(
-          response.data.message ||
-            "Unable to update review status."
+          response.data.message || "Unable to update review status."
         );
       }
 
-      const updatedReview = response.data?.review;
-
-      if (updatedReview?._id) {
-        setReviews((previous) =>
-          previous.map((item) =>
-            item._id === updatedReview._id
-              ? { ...item, ...updatedReview }
-              : item
-          )
-        );
-      } else {
-        await fetchReviews();
-      }
+      await applyUpdatedReview(response);
 
       toast.success(
-        review.approved === false
-          ? "Review approved."
-          : "Review hidden from customers."
+        nextApproved ? "Review approved." : "Review hidden from customers."
       );
     } catch (error) {
       console.error(
@@ -530,7 +579,16 @@ export default function Reviews() {
         error.response?.data || error.message
       );
 
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+
       toast.error(getErrorMessage(error));
+    } finally {
+      if (mounted.current) {
+        setTogglingId(null);
+      }
     }
   };
 
@@ -552,7 +610,7 @@ export default function Reviews() {
         <button
           type="button"
           className="mamta-admin-refresh"
-          onClick={fetchReviews}
+          onClick={() => fetchReviews(true)}
           disabled={loading || refreshing}
         >
           <RefreshCw
@@ -601,7 +659,8 @@ export default function Reviews() {
           <div>
             <span>Average rating</span>
             <strong>
-              {stats.average}<small> / 5</small>
+              {stats.average}
+              <small> / 5</small>
             </strong>
           </div>
         </article>
@@ -626,7 +685,7 @@ export default function Reviews() {
           <option value="all">All ratings</option>
           {[5, 4, 3, 2, 1].map((rating) => (
             <option key={rating} value={String(rating)}>
-              {rating} stars
+              {rating} {rating === 1 ? "star" : "stars"}
             </option>
           ))}
         </select>
@@ -662,7 +721,25 @@ export default function Reviews() {
       {loading ? (
         <div className="mamta-admin-review-state">
           <RefreshCw size={25} className="mamta-spin" />
-          <p>Loading reviews from MongoDB...</p>
+          <p>Loading reviews...</p>
+        </div>
+      ) : loadError && reviews.length === 0 ? (
+        <div className="mamta-admin-review-state" role="alert">
+          <MessageSquare size={34} />
+          <h3>Unable to load reviews</h3>
+          <p>{loadError}</p>
+          <button
+            type="button"
+            className="mamta-admin-refresh"
+            onClick={() => fetchReviews(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              size={17}
+              className={refreshing ? "mamta-spin" : ""}
+            />
+            Try again
+          </button>
         </div>
       ) : filteredReviews.length === 0 ? (
         <div className="mamta-admin-review-state">
@@ -676,7 +753,7 @@ export default function Reviews() {
           <button
             type="button"
             className="mamta-admin-refresh"
-            onClick={fetchReviews}
+            onClick={() => fetchReviews(true)}
             disabled={refreshing}
           >
             <RefreshCw
@@ -688,86 +765,92 @@ export default function Reviews() {
         </div>
       ) : (
         <div className="mamta-admin-review-list">
-          {filteredReviews.map((review) => (
-            <article
-              className="mamta-admin-review-card"
-              key={review._id}
-            >
-              <div className="mamta-admin-review-card-top">
-                <div className="mamta-admin-review-person">
-                  <div className="mamta-admin-review-avatar">
-                    {(review.name || "C").charAt(0).toUpperCase()}
+          {filteredReviews.map((review) => {
+            const isToggling = togglingId === review._id;
+            const isDeleting = deletingId === review._id;
+
+            return (
+              <article className="mamta-admin-review-card" key={review._id}>
+                <div className="mamta-admin-review-card-top">
+                  <div className="mamta-admin-review-person">
+                    <div className="mamta-admin-review-avatar">
+                      {(review.name || "C").charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h3>{review.name || "Customer"}</h3>
+                      <p>
+                        {getReviewCity(review) || "City unavailable"}
+                        {review.email ? ` · ${review.email}` : ""}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3>{review.name || "Customer"}</h3>
-                    <p>
-                      {review.city || review.place || "City unavailable"}
-                      {review.email ? ` · ${review.email}` : ""}
-                    </p>
-                  </div>
+
+                  <span
+                    className={`mamta-admin-review-status ${
+                      review.approved === false ? "is-hidden" : "is-approved"
+                    }`}
+                  >
+                    {review.approved === false ? "Hidden" : "Approved"}
+                  </span>
                 </div>
 
-                <span
-                  className={`mamta-admin-review-status ${
-                    review.approved === false
-                      ? "is-hidden"
-                      : "is-approved"
-                  }`}
-                >
-                  {review.approved === false ? "Hidden" : "Approved"}
-                </span>
-              </div>
+                <RatingStars rating={review.rating} />
 
-              <RatingStars rating={review.rating} />
+                <p className="mamta-admin-review-message">
+                  {getReviewText(review)}
+                </p>
 
-              <p className="mamta-admin-review-message">
-                {review.message || review.text || review.review || ""}
-              </p>
-
-              <div className="mamta-admin-review-meta">
-                <span>
-                  <Package size={15} />
-                  {getProductName(review)}
-                </span>
-                <span>{formatDate(review.createdAt)}</span>
-              </div>
-
-              <div className="mamta-admin-review-actions">
-                <button
-                  type="button"
-                  className="mamta-admin-action-approval"
-                  onClick={() => toggleApproval(review)}
-                >
-                  {review.approved === false
-                    ? "Approve review"
-                    : "Hide review"}
-                </button>
-
-                <div className="mamta-admin-action-group">
-                  <button
-                    type="button"
-                    className="mamta-admin-action-edit"
-                    onClick={() => openEdit(review)}
-                    aria-label={`Edit review by ${review.name || "customer"}`}
-                  >
-                    <Pencil size={16} />
-                    Edit
-                  </button>
-
-                  <button
-                    type="button"
-                    className="mamta-admin-action-delete"
-                    onClick={() => handleDelete(review)}
-                    disabled={deletingId === review._id}
-                    aria-label={`Delete review by ${review.name || "customer"}`}
-                  >
-                    <Trash2 size={16} />
-                    {deletingId === review._id ? "Deleting..." : "Delete"}
-                  </button>
+                <div className="mamta-admin-review-meta">
+                  <span>
+                    <Package size={15} />
+                    {getProductName(review)}
+                  </span>
+                  <span>{formatDate(review.createdAt)}</span>
                 </div>
-              </div>
-            </article>
-          ))}
+
+                <div className="mamta-admin-review-actions">
+                  <button
+                    type="button"
+                    className="mamta-admin-action-approval"
+                    onClick={() => toggleApproval(review)}
+                    disabled={isToggling || isDeleting}
+                  >
+                    {isToggling
+                      ? "Updating..."
+                      : review.approved === false
+                      ? "Approve review"
+                      : "Hide review"}
+                  </button>
+
+                  <div className="mamta-admin-action-group">
+                    <button
+                      type="button"
+                      className="mamta-admin-action-edit"
+                      onClick={() => openEdit(review)}
+                      disabled={isDeleting}
+                      aria-label={`Edit review by ${review.name || "customer"}`}
+                    >
+                      <Pencil size={16} />
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      className="mamta-admin-action-delete"
+                      onClick={() => handleDelete(review)}
+                      disabled={isDeleting}
+                      aria-label={`Delete review by ${
+                        review.name || "customer"
+                      }`}
+                    >
+                      <Trash2 size={16} />
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 
@@ -802,10 +885,7 @@ export default function Reviews() {
               </button>
             </div>
 
-            <form
-              className="mamta-review-edit-form"
-              onSubmit={handleSave}
-            >
+            <form className="mamta-review-edit-form" onSubmit={handleSave}>
               <div className="mamta-review-edit-grid">
                 <label>
                   Customer name

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   RefreshCw,
@@ -10,7 +10,111 @@ import {
 import { useNavigate } from "react-router-dom";
 import "./AdminOrders.css";
 
-const API_URL = "https://mamta-app-8.onrender.com/api/admin/orders";
+/* =========================================================
+   API CONFIG
+   Same base URL as the product pages.
+   Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
+   CRA:   use process.env.REACT_APP_API_URL instead.
+========================================================= */
+
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
+
+const ORDERS_URL = `${API_BASE}/admin/orders`;
+
+const TOKEN_KEY = "mamta_admin_token";
+const USER_KEY = "mamta_admin_user";
+
+const STATUS_OPTIONS = [
+  "Pending",
+  "Confirmed",
+  "Processing",
+  "Shipped",
+  "Delivered",
+  "Cancelled",
+];
+
+/* =========================================================
+   HELPERS (pure, defined once outside the component)
+========================================================= */
+
+const getOrderId = (order) => order._id || order.id || "";
+
+const getCustomerName = (order) =>
+  order.customer?.name || order.name || order.customerName || "Guest Customer";
+
+const getCustomerEmail = (order) =>
+  order.customer?.email || order.email || "—";
+
+const getTotal = (order) =>
+  Number(order.total || order.grandTotal || order.amount || 0);
+
+const getPaymentMethod = (order) =>
+  order.paymentMethod || order.payment?.method || "—";
+
+/* Backend stores the current status in `orderStatus` */
+const getStatus = (order) => order.orderStatus || order.status || "Pending";
+
+const getDate = (order) => {
+  const date = order.createdAt || order.date || order.created_on;
+
+  if (!date) {
+    return "—";
+  }
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+
+  return parsed.toLocaleDateString("en-PK", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const getItemCount = (order) => {
+  if (!Array.isArray(order.items)) {
+    return 0;
+  }
+
+  return order.items.reduce(
+    (total, item) => total + Number(item.quantity || 0),
+    0
+  );
+};
+
+const getOrderColors = (order) => {
+  if (!Array.isArray(order.items)) {
+    return [];
+  }
+
+  return order.items
+    .map((item) => (item.color ? String(item.color) : null))
+    .filter(Boolean);
+};
+
+const getStatusClass = (status) =>
+  String(status).toLowerCase().replace(/\s+/g, "-");
+
+/* Accepts either an array or { orders: [] } */
+const extractOrders = (data) => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.orders)) {
+    return data.orders;
+  }
+
+  return [];
+};
+
+/* =========================================================
+   ADMIN ORDERS
+========================================================= */
 
 const AdminOrders = () => {
   const navigate = useNavigate();
@@ -19,34 +123,49 @@ const AdminOrders = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState(null);
+  const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
   /* =========================================================
-     INITIAL FETCH
+     AUTH FAILURE
+     Clears the session and redirects. Returns true if the
+     response was an auth failure.
   ========================================================= */
 
-  useEffect(() => {
-    let cancelled = false;
+  const handleAuthFailure = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    navigate("/admin");
+  }, [navigate]);
 
-    const fetchOrders = async () => {
+  /* =========================================================
+     FETCH ORDERS (single source of truth)
+     GET /api/admin/orders
+     `isRefresh` shows the small refresh spinner instead of the
+     full-page loader.
+  ========================================================= */
+
+  const fetchOrders = useCallback(
+    async (isRefresh = false) => {
       try {
-        if (!cancelled) {
+        if (isRefresh) {
+          setRefreshing(true);
+        } else {
           setLoading(true);
         }
 
-        const token = localStorage.getItem("mamta_admin_token");
+        setError("");
+
+        const token = localStorage.getItem(TOKEN_KEY);
 
         if (!token) {
-          if (!cancelled) {
-            navigate("/admin/login");
-          }
-
+          navigate("/admin");
           return;
         }
 
-        const response = await fetch(API_URL, {
+        const response = await fetch(ORDERS_URL, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -54,112 +173,45 @@ const AdminOrders = () => {
           },
         });
 
-        if (response.status === 401) {
-          localStorage.removeItem("mamta_admin_token");
-
-          if (!cancelled) {
-            navigate("/admin/login");
-          }
-
+        if (response.status === 401 || response.status === 403) {
+          handleAuthFailure();
           return;
         }
 
         if (!response.ok) {
-          throw new Error("Unable to fetch orders.");
+          throw new Error("Unable to load orders.");
         }
 
         const data = await response.json();
 
-        console.log("ADMIN ORDERS:", data);
+        setOrders(extractOrders(data));
+      } catch (err) {
+        console.error("ADMIN ORDERS ERROR:", err);
 
-        let fetchedOrders = [];
-
-        if (Array.isArray(data)) {
-          fetchedOrders = data;
-        } else if (Array.isArray(data?.orders)) {
-          fetchedOrders = data.orders;
-        }
-
-        if (!cancelled) {
-          setOrders(fetchedOrders);
-        }
-      } catch (error) {
-        console.error("ADMIN ORDERS ERROR:", error);
-
-        if (!cancelled) {
-          setOrders([]);
-        }
+        setError(
+          err instanceof TypeError
+            ? "Cannot reach the server. If it was idle, wait a minute and press Refresh."
+            : err.message || "Unable to load orders."
+        );
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setLoading(false);
+        setRefreshing(false);
       }
-    };
-
-    fetchOrders();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [navigate]);
+    },
+    [navigate, handleAuthFailure]
+  );
 
   /* =========================================================
-     REFRESH
+     INITIAL LOAD
   ========================================================= */
 
-  const handleRefresh = async () => {
-    try {
-      setRefreshing(true);
-
-      const token = localStorage.getItem("mamta_admin_token");
-
-      if (!token) {
-        navigate("/admin/login");
-        return;
-      }
-
-      const response = await fetch(API_URL, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.status === 401) {
-        localStorage.removeItem("mamta_admin_token");
-
-        navigate("/admin/login");
-
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error("Unable to refresh orders.");
-      }
-
-      const data = await response.json();
-
-      console.log("REFRESHED ADMIN ORDERS:", data);
-
-      let refreshedOrders = [];
-
-      if (Array.isArray(data)) {
-        refreshedOrders = data;
-      } else if (Array.isArray(data?.orders)) {
-        refreshedOrders = data.orders;
-      }
-
-      setOrders(refreshedOrders);
-    } catch (error) {
-      console.error("REFRESH ORDERS ERROR:", error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   /* =========================================================
      DELETE ORDER
+     DELETE /api/admin/orders/:id
   ========================================================= */
 
   const handleDeleteOrder = async (orderId) => {
@@ -178,46 +230,32 @@ const AdminOrders = () => {
     try {
       setDeletingOrderId(orderId);
 
-      const token = localStorage.getItem("mamta_admin_token");
+      const token = localStorage.getItem(TOKEN_KEY);
 
       if (!token) {
-        navigate("/admin/login");
+        navigate("/admin");
         return;
       }
 
-      const response = await fetch(`${API_URL}/admin/${orderId}`, {
+      const response = await fetch(`${ORDERS_URL}/${orderId}`, {
         method: "DELETE",
-
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       });
 
-      /* =====================================================
-         UNAUTHORIZED
-      ====================================================== */
-
-      if (response.status === 401) {
-        localStorage.removeItem("mamta_admin_token");
-
-        navigate("/admin/login");
-
+      if (response.status === 401 || response.status === 403) {
+        handleAuthFailure();
         return;
       }
-
-      /* =====================================================
-         DELETE ERROR
-      ====================================================== */
 
       if (!response.ok) {
         let errorMessage = "Unable to delete order.";
 
         try {
           const errorData = await response.json();
-
-          errorMessage =
-            errorData?.message || errorMessage;
+          errorMessage = errorData?.message || errorMessage;
         } catch {
           // Ignore invalid JSON response
         }
@@ -225,24 +263,21 @@ const AdminOrders = () => {
         throw new Error(errorMessage);
       }
 
-      /* =====================================================
-         REMOVE FROM UI
-      ====================================================== */
-
       setOrders((currentOrders) =>
         currentOrders.filter(
-          (order) =>
-            String(order._id || order.id) !== String(orderId)
+          (order) => String(getOrderId(order)) !== String(orderId)
         )
       );
 
-      console.log("ORDER DELETED:", orderId);
-
       alert("Order deleted successfully.");
-    } catch (error) {
-      console.error("DELETE ORDER ERROR:", error);
+    } catch (err) {
+      console.error("DELETE ORDER ERROR:", err);
 
-      alert(error.message || "Unable to delete order.");
+      alert(
+        err instanceof TypeError
+          ? "Cannot reach the server. Please try again."
+          : err.message || "Unable to delete order."
+      );
     } finally {
       setDeletingOrderId(null);
     }
@@ -252,169 +287,22 @@ const AdminOrders = () => {
      FILTER ORDERS
   ========================================================= */
 
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
 
-    const customerName =
-      order.customer?.name ||
-      order.name ||
-      order.customerName ||
-      "";
+    return orders.filter((order) => {
+      const matchesSearch =
+        !searchValue ||
+        String(getCustomerName(order)).toLowerCase().includes(searchValue) ||
+        String(getCustomerEmail(order)).toLowerCase().includes(searchValue) ||
+        String(getOrderId(order)).toLowerCase().includes(searchValue);
 
-    const customerEmail =
-      order.customer?.email ||
-      order.email ||
-      "";
+      const matchesStatus =
+        statusFilter === "All" || getStatus(order) === statusFilter;
 
-    const orderId = order._id || order.id || "";
-
-    const matchesSearch =
-      !searchValue ||
-      String(customerName)
-        .toLowerCase()
-        .includes(searchValue) ||
-      String(customerEmail)
-        .toLowerCase()
-        .includes(searchValue) ||
-      String(orderId)
-        .toLowerCase()
-        .includes(searchValue);
-
-    /* =====================================================
-       IMPORTANT:
-       BACKEND USES orderStatus
-       ===================================================== */
-
-    const orderStatus =
-      order.orderStatus ||
-      order.status ||
-      "Pending";
-
-    const matchesStatus =
-      statusFilter === "All" ||
-      orderStatus === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  /* =========================================================
-     HELPERS
-  ========================================================= */
-
-  const getCustomerName = (order) => {
-    return (
-      order.customer?.name ||
-      order.name ||
-      order.customerName ||
-      "Guest Customer"
-    );
-  };
-
-  const getCustomerEmail = (order) => {
-    return (
-      order.customer?.email ||
-      order.email ||
-      "—"
-    );
-  };
-
-  const getTotal = (order) => {
-    return Number(
-      order.total ||
-        order.grandTotal ||
-        order.amount ||
-        0
-    );
-  };
-
-  const getPaymentMethod = (order) => {
-    return (
-      order.paymentMethod ||
-      order.payment?.method ||
-      "—"
-    );
-  };
-
-  /* =========================================================
-     STATUS
-     
-     IMPORTANT:
-     Backend stores status in `orderStatus`
-     ========================================================= */
-
-  const getStatus = (order) => {
-    return (
-      order.orderStatus ||
-      order.status ||
-      "Pending"
-    );
-  };
-
-  const getDate = (order) => {
-    const date =
-      order.createdAt ||
-      order.date ||
-      order.created_on;
-
-    if (!date) {
-      return "—";
-    }
-
-    try {
-      return new Date(date).toLocaleDateString(
-        "en-PK",
-        {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }
-      );
-    } catch {
-      return "—";
-    }
-  };
-
-  const getItemCount = (order) => {
-    if (!Array.isArray(order.items)) {
-      return 0;
-    }
-
-    return order.items.reduce(
-      (total, item) =>
-        total + Number(item.quantity || 0),
-      0
-    );
-  };
-
-  /* =========================================================
-     GET COLORS
-  ========================================================= */
-
-  const getOrderColors = (order) => {
-    if (!Array.isArray(order.items)) {
-      return [];
-    }
-
-    return order.items
-      .map((item) => {
-        if (!item.color) {
-          return null;
-        }
-
-        return String(item.color);
-      })
-      .filter(Boolean);
-  };
-
-  /* =========================================================
-     STATUS CLASS
-  ========================================================= */
-
-  const getStatusClass = (status) => {
-    return String(status)
-      .toLowerCase()
-      .replace(/\s+/g, "-");
-  };
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, search, statusFilter]);
 
   /* =========================================================
      OPEN ORDER
@@ -436,11 +324,7 @@ const AdminOrders = () => {
     return (
       <div className="admin-orders-page">
         <div className="admin-orders-loading">
-          <RefreshCw
-            size={28}
-            className="admin-orders-spinner"
-          />
-
+          <RefreshCw size={28} className="admin-orders-spinner" />
           <p>Loading orders...</p>
         </div>
       </div>
@@ -453,492 +337,241 @@ const AdminOrders = () => {
 
   return (
     <div className="admin-orders-page">
-
-      {/* =====================================================
-          HEADER
-      ====================================================== */}
+      {/* HEADER */}
 
       <div className="admin-orders-header">
-
         <div>
-          <span className="admin-orders-eyebrow">
-            MAMTA ADMIN
-          </span>
+          <span className="admin-orders-eyebrow">MAMTA ADMIN</span>
 
           <h1>Orders</h1>
 
-          <p>
-            Manage and review customer orders.
-          </p>
+          <p>Manage and review customer orders.</p>
         </div>
 
         <button
           type="button"
           className="admin-refresh-button"
-          onClick={handleRefresh}
+          onClick={() => fetchOrders(true)}
           disabled={refreshing}
         >
           <RefreshCw
             size={17}
-            className={
-              refreshing
-                ? "admin-orders-spinner"
-                : ""
-            }
+            className={refreshing ? "admin-orders-spinner" : ""}
           />
 
-          {refreshing
-            ? "Refreshing..."
-            : "Refresh"}
+          {refreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 
-      {/* =====================================================
-          FILTER BAR
-      ====================================================== */}
+      {/* FILTER BAR */}
 
       <div className="admin-orders-toolbar">
-
         <div className="admin-orders-search">
-
           <Search size={18} />
 
           <input
             type="text"
             placeholder="Search orders, customer name or email..."
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
+            onChange={(event) => setSearch(event.target.value)}
           />
         </div>
 
         <div className="admin-orders-filter">
-
           <Filter size={17} />
 
           <select
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value)
-            }
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter by status"
           >
-            <option value="All">
-              All Status
-            </option>
+            <option value="All">All Status</option>
 
-            <option value="Pending">
-              Pending
-            </option>
-
-            <option value="Confirmed">
-              Confirmed
-            </option>
-
-            <option value="Processing">
-              Processing
-            </option>
-
-            <option value="Shipped">
-              Shipped
-            </option>
-
-            <option value="Delivered">
-              Delivered
-            </option>
-
-            <option value="Cancelled">
-              Cancelled
-            </option>
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* =====================================================
-          ORDER COUNT
-      ====================================================== */}
+      {/* ERROR */}
+
+      {error && (
+        <div className="admin-orders-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {/* ORDER COUNT */}
 
       <div className="admin-orders-count">
-
-        Showing{" "}
-
-        <strong>
-          {filteredOrders.length}
-        </strong>
-
-        {" "}of{" "}
-
-        <strong>
-          {orders.length}
-        </strong>
-
-        {" "}orders
-
+        Showing <strong>{filteredOrders.length}</strong> of{" "}
+        <strong>{orders.length}</strong> orders
       </div>
 
-      {/* =====================================================
-          TABLE
-      ====================================================== */}
+      {/* TABLE */}
 
       <div className="admin-orders-table-wrapper">
-
         {filteredOrders.length === 0 ? (
-
           <div className="admin-orders-empty">
-
             <div className="admin-orders-empty-icon">
-
               <ShoppingBag size={28} />
-
             </div>
 
-            <h2>
-              No orders found
-            </h2>
+            <h2>No orders found</h2>
 
             <p>
-              There are no orders matching your current filters.
+              {orders.length === 0
+                ? "There are no orders yet."
+                : "There are no orders matching your current filters."}
             </p>
-
           </div>
-
         ) : (
-
           <table className="admin-orders-table">
-
             <thead>
-
               <tr>
-
-                <th>
-                  ORDER
-                </th>
-
-                <th>
-                  CUSTOMER
-                </th>
-
-                <th>
-                  ITEMS
-                </th>
-
-                <th>
-                  TOTAL
-                </th>
-
-                <th>
-                  PAYMENT
-                </th>
-
-                <th>
-                  STATUS
-                </th>
-
-                <th>
-                  DATE
-                </th>
-
-                <th>
-                  ACTION
-                </th>
-
+                <th>ORDER</th>
+                <th>CUSTOMER</th>
+                <th>ITEMS</th>
+                <th>TOTAL</th>
+                <th>PAYMENT</th>
+                <th>STATUS</th>
+                <th>DATE</th>
+                <th>ACTION</th>
               </tr>
-
             </thead>
 
             <tbody>
+              {filteredOrders.map((order, index) => {
+                const orderId = getOrderId(order);
+                const colors = getOrderColors(order);
+                const itemCount = getItemCount(order);
+                const status = getStatus(order);
+                const isDeleting =
+                  deletingOrderId !== null &&
+                  String(deletingOrderId) === String(orderId);
 
-              {filteredOrders.map(
-                (order, index) => {
+                return (
+                  <tr key={orderId || index}>
+                    {/* ORDER */}
 
-                  const orderId =
-                    order._id ||
-                    order.id ||
-                    "";
+                    <td>
+                      <div className="admin-order-id">
+                        <span>#</span>
+                        {String(orderId).slice(-8)}
+                      </div>
+                    </td>
 
-                  const colors =
-                    getOrderColors(order);
+                    {/* CUSTOMER */}
 
-                  const itemCount =
-                    getItemCount(order);
+                    <td>
+                      <div className="admin-order-customer">
+                        <strong>{getCustomerName(order)}</strong>
+                        <span>{getCustomerEmail(order)}</span>
+                      </div>
+                    </td>
 
-                  /* =================================================
-                     IMPORTANT:
-                     ALWAYS GET CURRENT STATUS FROM orderStatus
-                  ================================================== */
+                    {/* ITEMS */}
 
-                  const status =
-                    getStatus(order);
-
-                  const isDeleting =
-                    String(
-                      deletingOrderId
-                    ) ===
-                    String(orderId);
-
-                  return (
-
-                    <tr
-                      key={
-                        orderId ||
-                        index
-                      }
-                    >
-
-                      {/* =================================================
-                          ORDER
-                      ================================================== */}
-
-                      <td>
-
-                        <div className="admin-order-id">
-
-                          <span>
-                            #
-                          </span>
-
-                          {String(
-                            orderId
-                          ).slice(-8)}
-
-                        </div>
-
-                      </td>
-
-                      {/* =================================================
-                          CUSTOMER
-                      ================================================== */}
-
-                      <td>
-
-                        <div className="admin-order-customer">
-
-                          <strong>
-                            {
-                              getCustomerName(
-                                order
-                              )
-                            }
-                          </strong>
-
-                          <span>
-                            {
-                              getCustomerEmail(
-                                order
-                              )
-                            }
-                          </span>
-
-                        </div>
-
-                      </td>
-
-                      {/* =================================================
-                          ITEMS
-                      ================================================== */}
-
-                      <td>
-
-                        <div className="admin-order-items-cell">
-
-                          <strong>
-                            {itemCount}{" "}
-                            {itemCount === 1
-                              ? "item"
-                              : "items"}
-                          </strong>
-
-                          {colors.length > 0 && (
-
-                            <div className="admin-order-colors-preview">
-
-                              {colors
-                                .slice(0, 2)
-                                .map(
-                                  (
-                                    color,
-                                    colorIndex
-                                  ) => (
-
-                                    <span
-                                      key={`${color}-${colorIndex}`}
-                                      className="admin-order-color-preview"
-                                    >
-
-                                      <span className="admin-order-color-dot"></span>
-
-                                      {color}
-
-                                    </span>
-
-                                  )
-                                )}
-
-                              {colors.length > 2 && (
-
-                                <span className="admin-order-more-colors">
-
-                                  +
-                                  {
-                                    colors.length -
-                                    2
-                                  }
-
-                                </span>
-
-                              )}
-
-                            </div>
-
-                          )}
-
-                        </div>
-
-                      </td>
-
-                      {/* =================================================
-                          TOTAL
-                      ================================================== */}
-
-                      <td>
-
-                        <strong className="admin-order-total">
-
-                          Rs.{" "}
-
-                          {getTotal(
-                            order
-                          ).toLocaleString()}
-
+                    <td>
+                      <div className="admin-order-items-cell">
+                        <strong>
+                          {itemCount} {itemCount === 1 ? "item" : "items"}
                         </strong>
 
-                      </td>
+                        {colors.length > 0 && (
+                          <div className="admin-order-colors-preview">
+                            {colors.slice(0, 2).map((color, colorIndex) => (
+                              <span
+                                key={`${color}-${colorIndex}`}
+                                className="admin-order-color-preview"
+                              >
+                                <span className="admin-order-color-dot"></span>
+                                {color}
+                              </span>
+                            ))}
 
-                      {/* =================================================
-                          PAYMENT
-                      ================================================== */}
+                            {colors.length > 2 && (
+                              <span className="admin-order-more-colors">
+                                +{colors.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
 
-                      <td>
+                    {/* TOTAL */}
 
-                        <span className="admin-payment-method">
+                    <td>
+                      <strong className="admin-order-total">
+                        Rs. {getTotal(order).toLocaleString()}
+                      </strong>
+                    </td>
 
-                          {
-                            getPaymentMethod(
-                              order
-                            )
-                          }
+                    {/* PAYMENT */}
 
-                        </span>
+                    <td>
+                      <span className="admin-payment-method">
+                        {getPaymentMethod(order)}
+                      </span>
+                    </td>
 
-                      </td>
+                    {/* STATUS */}
 
-                      {/* =================================================
-                          STATUS
-                      ================================================== */}
+                    <td>
+                      <span
+                        className={`admin-order-status ${getStatusClass(
+                          status
+                        )}`}
+                      >
+                        {status}
+                      </span>
+                    </td>
 
-                      <td>
+                    {/* DATE */}
 
-                        <span
-                          className={`admin-order-status ${getStatusClass(
-                            status
-                          )}`}
+                    <td>
+                      <span className="admin-order-date">
+                        {getDate(order)}
+                      </span>
+                    </td>
+
+                    {/* ACTION */}
+
+                    <td>
+                      <div className="admin-order-actions">
+                        <button
+                          type="button"
+                          className="admin-view-order-button"
+                          onClick={() => handleViewOrder(orderId)}
+                          disabled={isDeleting}
                         >
+                          <Eye size={16} />
+                          View
+                        </button>
 
-                          {status}
-
-                        </span>
-
-                      </td>
-
-                      {/* =================================================
-                          DATE
-                      ================================================== */}
-
-                      <td>
-
-                        <span className="admin-order-date">
-
-                          {
-                            getDate(
-                              order
-                            )
-                          }
-
-                        </span>
-
-                      </td>
-
-                      {/* =================================================
-                          ACTION
-                      ================================================== */}
-
-                      <td>
-
-                        <div className="admin-order-actions">
-
-                          {/* VIEW */}
-
-                          <button
-                            type="button"
-                            className="admin-view-order-button"
-                            onClick={() =>
-                              handleViewOrder(
-                                orderId
-                              )
-                            }
-                            disabled={
-                              isDeleting
-                            }
-                          >
-
-                            <Eye size={16} />
-
-                            View
-
-                          </button>
-
-                          {/* DELETE */}
-
-                          <button
-                            type="button"
-                            className="admin-delete-order-button"
-                            onClick={() =>
-                              handleDeleteOrder(
-                                orderId
-                              )
-                            }
-                            disabled={
-                              isDeleting
-                            }
-                            title="Delete order"
-                          >
-
-                            <Trash2 size={16} />
-
-                            {isDeleting
-                              ? "Deleting..."
-                              : "Delete"}
-
-                          </button>
-
-                        </div>
-
-                      </td>
-
-                    </tr>
-
-                  );
-                }
-              )}
-
+                        <button
+                          type="button"
+                          className="admin-delete-order-button"
+                          onClick={() => handleDeleteOrder(orderId)}
+                          disabled={isDeleting}
+                          title="Delete order"
+                        >
+                          <Trash2 size={16} />
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
-
           </table>
-
         )}
-
       </div>
-
     </div>
   );
 };

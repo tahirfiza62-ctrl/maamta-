@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
@@ -11,8 +11,7 @@ import {
   ShieldOff,
   ShoppingBag,
   RefreshCw,
-  MapPin,
-  Phone,
+  Hash,
   Package,
   Clock3,
   CheckCircle2,
@@ -22,8 +21,87 @@ import {
 
 import "./AdminCustomerDetails.css";
 
-const API_URL =
-  "https://mamta-app-8.onrender.com/api/admin/customers";
+/* =========================================================
+   API CONFIG
+   Same base URL as the other admin pages.
+   Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
+   CRA:   use process.env.REACT_APP_API_URL instead.
+========================================================= */
+
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
+
+const CUSTOMERS_URL = `${API_BASE}/admin/customers`;
+
+const TOKEN_KEY = "mamta_admin_token";
+const USER_KEY = "mamta_admin_user";
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const formatDate = (date, month = "short") => {
+  if (!date) {
+    return "N/A";
+  }
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "N/A";
+  }
+
+  return parsed.toLocaleDateString("en-PK", {
+    day: "2-digit",
+    month,
+    year: "numeric",
+  });
+};
+
+const getStatusIcon = (status) => {
+  switch (status) {
+    case "Delivered":
+      return <CheckCircle2 size={14} />;
+
+    case "Shipped":
+      return <Truck size={14} />;
+
+    case "Processing":
+      return <Package size={14} />;
+
+    case "Cancelled":
+      return <XCircle size={14} />;
+
+    default:
+      return <Clock3 size={14} />;
+  }
+};
+
+const getStatusClass = (status) => {
+  switch (status) {
+    case "Delivered":
+      return "delivered";
+
+    case "Shipped":
+      return "shipped";
+
+    case "Processing":
+      return "processing";
+
+    case "Cancelled":
+      return "cancelled";
+
+    case "Confirmed":
+      return "confirmed";
+
+    default:
+      return "pending";
+  }
+};
+
+/* =========================================================
+   ADMIN CUSTOMER DETAILS
+========================================================= */
 
 const AdminCustomerDetails = () => {
   const { id } = useParams();
@@ -39,262 +117,98 @@ const AdminCustomerDetails = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notFound, setNotFound] = useState(false);
 
   /* =======================================================
-     TOKEN
+     FETCH CUSTOMER (single source of truth)
+     GET /api/admin/customers/:id
+     `isCancelled` lets the effect ignore a stale response.
   ======================================================= */
 
-  const getToken = () => {
-    return localStorage.getItem("mamta_admin_token");
-  };
+  const fetchCustomer = useCallback(
+    async (isCancelled = () => false) => {
+      try {
+        setLoading(true);
+        setError("");
+        setNotFound(false);
 
-  /* =======================================================
-     FETCH CUSTOMER - USED BY REFRESH BUTTON
-  ======================================================= */
+        const token = localStorage.getItem(TOKEN_KEY);
 
-  const fetchCustomer = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const token = getToken();
-
-      if (!token) {
-        navigate("/admin");
-        return;
-      }
-
-      const response = await axios.get(
-        `${API_URL}/admin/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        if (!token) {
+          navigate("/admin");
+          return;
         }
-      );
 
-      console.log(
-        "CUSTOMER DETAILS RESPONSE:",
-        response.data
-      );
+        const response = await axios.get(`${CUSTOMERS_URL}/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      setCustomer(
-        response.data?.customer || null
-      );
+        if (isCancelled()) {
+          return;
+        }
 
-      setOrders(
-        response.data?.orders || []
-      );
+        const loadedCustomer = response.data?.customer || null;
+        const loadedOrders = Array.isArray(response.data?.orders)
+          ? response.data.orders
+          : [];
 
-      setTotalOrders(
-        response.data?.totalOrders ??
-          response.data?.orders?.length ??
-          0
-      );
-    } catch (err) {
-      console.error(
-        "FETCH CUSTOMER DETAILS ERROR:",
-        err
-      );
+        setCustomer(loadedCustomer);
+        setOrders(loadedOrders);
+        setTotalOrders(response.data?.totalOrders ?? loadedOrders.length);
 
-      if (
-        err.response?.status === 401 ||
-        err.response?.status === 403
-      ) {
-        localStorage.removeItem(
-          "mamta_admin_token"
-        );
+        if (!loadedCustomer) {
+          setNotFound(true);
+        }
+      } catch (err) {
+        if (isCancelled()) {
+          return;
+        }
 
-        navigate("/admin");
+        console.error("FETCH CUSTOMER DETAILS ERROR:", err);
 
-        return;
+        const code = err.response?.status;
+
+        if (code === 401 || code === 403) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+          navigate("/admin");
+          return;
+        }
+
+        setCustomer(null);
+
+        if (code === 404) {
+          setNotFound(true);
+        } else {
+          setError(
+            err.response?.data?.message ||
+              (err.request && !err.response
+                ? "Cannot reach the server. If it was idle, wait a minute and try again."
+                : "Failed to load customer details.")
+          );
+        }
+      } finally {
+        if (!isCancelled()) {
+          setLoading(false);
+        }
       }
-
-      setError(
-        err.response?.data?.message ||
-          "Failed to load customer details."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [id, navigate]
+  );
 
   /* =======================================================
-     INITIAL CUSTOMER LOAD
-     React 19 SAFE
+     INITIAL LOAD / ID CHANGE
   ======================================================= */
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadCustomer = async () => {
-      const token = getToken();
-
-      if (!token) {
-        if (!cancelled) {
-          navigate("/admin");
-        }
-
-        return;
-      }
-
-      try {
-        const response = await axios.get(
-          `${API_URL}/admin/${id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        console.log(
-          "CUSTOMER DETAILS RESPONSE:",
-          response.data
-        );
-
-        setCustomer(
-          response.data?.customer || null
-        );
-
-        setOrders(
-          response.data?.orders || []
-        );
-
-        setTotalOrders(
-          response.data?.totalOrders ??
-            response.data?.orders?.length ??
-            0
-        );
-
-        setError("");
-      } catch (err) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error(
-          "FETCH CUSTOMER DETAILS ERROR:",
-          err
-        );
-
-        if (
-          err.response?.status === 401 ||
-          err.response?.status === 403
-        ) {
-          localStorage.removeItem(
-            "mamta_admin_token"
-          );
-
-          navigate("/admin");
-
-          return;
-        }
-
-        setError(
-          err.response?.data?.message ||
-            "Failed to load customer details."
-        );
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadCustomer();
+    fetchCustomer(() => cancelled);
 
     return () => {
       cancelled = true;
     };
-  }, [id, navigate]);
-
-  /* =======================================================
-     DATE FORMAT
-  ======================================================= */
-
-  const formatDate = (date) => {
-    if (!date) {
-      return "N/A";
-    }
-
-    return new Date(date).toLocaleDateString(
-      "en-PK",
-      {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }
-    );
-  };
-
-  const formatShortDate = (date) => {
-    if (!date) {
-      return "N/A";
-    }
-
-    return new Date(date).toLocaleDateString(
-      "en-PK",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
-  };
-
-  /* =======================================================
-     ORDER STATUS ICON
-  ======================================================= */
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "Delivered":
-        return <CheckCircle2 size={14} />;
-
-      case "Shipped":
-        return <Truck size={14} />;
-
-      case "Processing":
-        return <Package size={14} />;
-
-      case "Cancelled":
-        return <XCircle size={14} />;
-
-      default:
-        return <Clock3 size={14} />;
-    }
-  };
-
-  /* =======================================================
-     ORDER STATUS CLASS
-  ======================================================= */
-
-  const getStatusClass = (status) => {
-    switch (status) {
-      case "Delivered":
-        return "delivered";
-
-      case "Shipped":
-        return "shipped";
-
-      case "Processing":
-        return "processing";
-
-      case "Cancelled":
-        return "cancelled";
-
-      case "Confirmed":
-        return "confirmed";
-
-      default:
-        return "pending";
-    }
-  };
+  }, [fetchCustomer]);
 
   /* =======================================================
      LOADING
@@ -305,17 +219,14 @@ const AdminCustomerDetails = () => {
       <div className="admin-customer-details-page">
         <div className="customer-details-loading">
           <div className="customer-details-loader"></div>
-
-          <p>
-            Loading customer details...
-          </p>
+          <p>Loading customer details...</p>
         </div>
       </div>
     );
   }
 
   /* =======================================================
-     ERROR
+     ERROR / NOT FOUND
   ======================================================= */
 
   if (error || !customer) {
@@ -324,33 +235,20 @@ const AdminCustomerDetails = () => {
         <button
           type="button"
           className="customer-details-back-btn"
-          onClick={() =>
-            navigate("/admin/customers")
-          }
+          onClick={() => navigate("/admin/customers")}
         >
           <ArrowLeft size={17} />
-
           Back to Customers
         </button>
 
-        <div className="customer-details-error">
+        <div className="customer-details-error" role={error ? "alert" : undefined}>
           <UserRound size={34} />
 
-          <h2>
-            Customer Not Found
-          </h2>
+          <h2>{notFound || !error ? "Customer Not Found" : "Unable to Load Customer"}</h2>
 
-          <p>
-            {error ||
-              "The requested customer could not be found."}
-          </p>
+          <p>{error || "The requested customer could not be found."}</p>
 
-          <button
-            type="button"
-            onClick={() =>
-              navigate("/admin/customers")
-            }
-          >
+          <button type="button" onClick={() => navigate("/admin/customers")}>
             View Customers
           </button>
         </div>
@@ -362,100 +260,69 @@ const AdminCustomerDetails = () => {
      PAGE
   ======================================================= */
 
+  const active = customer.active !== false;
+
   return (
     <div className="admin-customer-details-page">
-
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+      {/* HEADER */}
 
       <div className="customer-details-header">
-
         <div>
           <button
             type="button"
             className="customer-details-back-btn"
-            onClick={() =>
-              navigate("/admin/customers")
-            }
+            onClick={() => navigate("/admin/customers")}
           >
             <ArrowLeft size={17} />
-
             Back to Customers
           </button>
 
           <div className="customer-details-title">
-
             <div className="customer-details-title-icon">
               <UserRound size={23} />
             </div>
 
             <div>
-              <span>
-                MAMTA ADMIN
-              </span>
-
-              <h1>
-                Customer Details
-              </h1>
-
-              <p>
-                View customer account information.
-              </p>
+              <span>MAMTA ADMIN</span>
+              <h1>Customer Details</h1>
+              <p>View customer account information.</p>
             </div>
-
           </div>
         </div>
 
         <button
           type="button"
           className="customer-details-refresh-btn"
-          onClick={fetchCustomer}
+          onClick={() => fetchCustomer()}
           disabled={loading}
         >
           <RefreshCw size={17} />
-
           Refresh
         </button>
-
       </div>
 
-      {/* ===================================================
-          CUSTOMER PROFILE
-      =================================================== */}
+      {/* CUSTOMER PROFILE */}
 
       <div className="customer-profile-card">
-
         <div className="customer-profile-top">
-
           <div className="customer-large-avatar">
-            {customer.name
-              ?.charAt(0)
-              ?.toUpperCase() || "C"}
+            {customer.name?.charAt(0)?.toUpperCase() || "C"}
           </div>
 
           <div className="customer-profile-main">
-
-            <h2>
-              {customer.name ||
-                "Unnamed Customer"}
-            </h2>
+            <h2>{customer.name || "Unnamed Customer"}</h2>
 
             <p>
               <Mail size={15} />
-
-              {customer.email ||
-                "No email available"}
+              {customer.email || "No email available"}
             </p>
 
             <span
               className={`customer-details-status ${
-                customer.active
-                  ? "active"
-                  : "inactive"
+                active ? "active" : "inactive"
               }`}
             >
-              {customer.active ? (
+              {active ? (
                 <>
                   <ShieldCheck size={14} />
                   Active Account
@@ -467,233 +334,129 @@ const AdminCustomerDetails = () => {
                 </>
               )}
             </span>
-
           </div>
-
         </div>
 
         <div className="customer-information-grid">
-
           <div className="customer-information-item">
-
             <div className="information-icon">
               <UserRound size={17} />
             </div>
 
             <div>
-              <span>
-                Customer Name
-              </span>
-
-              <strong>
-                {customer.name || "N/A"}
-              </strong>
+              <span>Customer Name</span>
+              <strong>{customer.name || "N/A"}</strong>
             </div>
-
           </div>
 
           <div className="customer-information-item">
-
             <div className="information-icon">
               <Mail size={17} />
             </div>
 
             <div>
-              <span>
-                Email Address
-              </span>
-
-              <strong>
-                {customer.email || "N/A"}
-              </strong>
+              <span>Email Address</span>
+              <strong>{customer.email || "N/A"}</strong>
             </div>
-
           </div>
 
           <div className="customer-information-item">
-
             <div className="information-icon">
               <CalendarDays size={17} />
             </div>
 
             <div>
-              <span>
-                Registered On
-              </span>
-
-              <strong>
-                {formatDate(
-                  customer.createdAt
-                )}
-              </strong>
+              <span>Registered On</span>
+              <strong>{formatDate(customer.createdAt, "long")}</strong>
             </div>
-
           </div>
 
           <div className="customer-information-item">
-
             <div className="information-icon">
-              {customer.active ? (
-                <ShieldCheck size={17} />
-              ) : (
-                <ShieldOff size={17} />
-              )}
+              {active ? <ShieldCheck size={17} /> : <ShieldOff size={17} />}
             </div>
 
             <div>
-              <span>
-                Account Status
-              </span>
-
-              <strong>
-                {customer.active
-                  ? "Active"
-                  : "Inactive"}
-              </strong>
+              <span>Account Status</span>
+              <strong>{active ? "Active" : "Inactive"}</strong>
             </div>
-
           </div>
-
         </div>
-
       </div>
 
-      {/* ===================================================
-          SUMMARY
-      =================================================== */}
+      {/* SUMMARY */}
 
       <div className="customer-summary-grid">
-
         <div className="customer-summary-card">
-
           <div className="customer-summary-icon">
             <ShoppingBag size={21} />
           </div>
 
           <div>
-            <span>
-              Total Orders
-            </span>
-
-            <strong>
-              {totalOrders}
-            </strong>
-
-            <p>
-              Orders placed by this customer
-            </p>
+            <span>Total Orders</span>
+            <strong>{totalOrders}</strong>
+            <p>Orders placed by this customer</p>
           </div>
-
         </div>
 
         <div className="customer-summary-card">
-
           <div className="customer-summary-icon">
-            <MapPin size={21} />
+            <Hash size={21} />
           </div>
 
           <div>
-            <span>
-              Customer ID
-            </span>
+            <span>Customer ID</span>
 
             <strong>
-              {customer._id
-                ? customer._id
-                    .slice(-8)
-                    .toUpperCase()
-                : "N/A"}
+              {customer._id ? String(customer._id).slice(-8).toUpperCase() : "N/A"}
             </strong>
 
-            <p>
-              Registered MAMTA customer
-            </p>
+            <p>Registered MAMTA customer</p>
           </div>
-
         </div>
 
         <div className="customer-summary-card">
-
           <div className="customer-summary-icon">
-            <Phone size={21} />
+            <ShieldCheck size={21} />
           </div>
 
           <div>
-            <span>
-              Account Role
-            </span>
-
-            <strong>
-              {customer.role ||
-                "customer"}
-            </strong>
-
-            <p>
-              Standard customer account
-            </p>
+            <span>Account Role</span>
+            <strong>{customer.role || "customer"}</strong>
+            <p>Standard customer account</p>
           </div>
-
         </div>
-
       </div>
 
-      {/* ===================================================
-          ORDER HISTORY
-      =================================================== */}
+      {/* ORDER HISTORY */}
 
       <div className="customer-orders-section">
-
         <div className="customer-orders-heading">
-
           <div>
-            <span>
-              ORDER HISTORY
-            </span>
-
-            <h2>
-              Customer Orders
-            </h2>
-
-            <p>
-              Orders placed by{" "}
-              {customer.name ||
-                "this customer"}.
-            </p>
+            <span>ORDER HISTORY</span>
+            <h2>Customer Orders</h2>
+            <p>Orders placed by {customer.name || "this customer"}.</p>
           </div>
 
           <div className="customer-orders-count">
-            {totalOrders} Orders
+            {totalOrders} {totalOrders === 1 ? "Order" : "Orders"}
           </div>
-
         </div>
 
         {orders.length === 0 ? (
-
           <div className="customer-orders-empty">
-
             <div className="customer-orders-empty-icon">
               <ShoppingBag size={30} />
             </div>
 
-            <h3>
-              No Orders Yet
-            </h3>
+            <h3>No Orders Yet</h3>
 
-            <p>
-              This customer has not placed
-              any orders yet.
-            </p>
-
+            <p>This customer has not placed any orders yet.</p>
           </div>
-
         ) : (
-
           <div className="customer-orders-card">
-
             <div className="customer-orders-table-wrapper">
-
               <table className="customer-orders-table">
-
                 <thead>
                   <tr>
                     <th>Order</th>
@@ -707,93 +470,70 @@ const AdminCustomerDetails = () => {
                 </thead>
 
                 <tbody>
+                  {orders.map((order, index) => {
+                    const orderId = order._id || order.id || "";
+                    const paymentStatus = order.paymentStatus || "Pending";
+                    const orderStatus = order.orderStatus || "Pending";
 
-                  {orders.map((order) => (
+                    return (
+                      <tr key={orderId || index}>
+                        <td>
+                          <strong>
+                            #
+                            {order.orderNumber
+                              ? order.orderNumber
+                              : String(orderId).slice(-8)}
+                          </strong>
+                        </td>
 
-                    <tr key={order._id}>
+                        <td>{order.items?.length || 0}</td>
 
-                      <td>
-                        <strong>
-                          #{order.orderNumber}
-                        </strong>
-                      </td>
+                        <td>
+                          <strong>
+                            Rs. {Number(order.total || 0).toLocaleString()}
+                          </strong>
+                        </td>
 
-                      <td>
-                        {order.items?.length || 0}
-                      </td>
+                        <td>
+                          <span
+                            className={`customer-payment-status ${paymentStatus.toLowerCase()}`}
+                          >
+                            {paymentStatus}
+                          </span>
+                        </td>
 
-                      <td>
-                        <strong>
-                          Rs.{" "}
-                          {Number(
-                            order.total || 0
-                          ).toLocaleString()}
-                        </strong>
-                      </td>
+                        <td>
+                          <span
+                            className={`customer-order-status ${getStatusClass(
+                              orderStatus
+                            )}`}
+                          >
+                            {getStatusIcon(orderStatus)}
+                            {orderStatus}
+                          </span>
+                        </td>
 
-                      <td>
-                        <span
-                          className={`customer-payment-status ${
-                            order.paymentStatus
-                              ?.toLowerCase()
-                          }`}
-                        >
-                          {order.paymentStatus ||
-                            "Pending"}
-                        </span>
-                      </td>
+                        <td>{formatDate(order.createdAt)}</td>
 
-                      <td>
-                        <span
-                          className={`customer-order-status ${getStatusClass(
-                            order.orderStatus
-                          )}`}
-                        >
-                          {getStatusIcon(
-                            order.orderStatus
-                          )}
-
-                          {order.orderStatus ||
-                            "Pending"}
-                        </span>
-                      </td>
-
-                      <td>
-                        {formatShortDate(
-                          order.createdAt
-                        )}
-                      </td>
-
-                      <td>
-                        <button
-                          type="button"
-                          className="customer-order-view-btn"
-                          onClick={() =>
-                            navigate(
-                              `/admin/orders/${order._id}`
-                            )
-                          }
-                        >
-                          View
-                        </button>
-                      </td>
-
-                    </tr>
-
-                  ))}
-
+                        <td>
+                          <button
+                            type="button"
+                            className="customer-order-view-btn"
+                            disabled={!orderId}
+                            onClick={() => navigate(`/admin/orders/${orderId}`)}
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
-
               </table>
-
             </div>
-
           </div>
-
         )}
-
       </div>
-
     </div>
   );
 };
