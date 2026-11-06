@@ -10,7 +10,6 @@ import {
   Star,
 } from "lucide-react";
 
-import ScrollReveal from "../ScrollReveal/ScrollReveal";
 import "./FeaturedProducts.css";
 
 /* =========================================================
@@ -136,6 +135,59 @@ const readWishlist = () => {
 };
 
 /* =========================================================
+   LOADING PLACEHOLDER
+========================================================= */
+
+const ProductSkeleton = () => {
+  return (
+    <article className="product-card">
+      <div
+        className="product-image"
+        style={{
+          background: "#f4d9dc",
+          minHeight: "260px",
+          animation: "mamtaPulse 1.3s ease-in-out infinite",
+        }}
+      />
+
+      <div
+        className="product-info"
+        style={{ padding: "16px" }}
+      >
+        <div
+          style={{
+            height: "15px",
+            width: "75%",
+            background: "#f4d9dc",
+            borderRadius: "5px",
+            marginBottom: "14px",
+          }}
+        />
+
+        <div
+          style={{
+            height: "11px",
+            width: "35%",
+            background: "#f4d9dc",
+            borderRadius: "5px",
+            marginBottom: "14px",
+          }}
+        />
+
+        <div
+          style={{
+            height: "16px",
+            width: "45%",
+            background: "#f4d9dc",
+            borderRadius: "5px",
+          }}
+        />
+      </div>
+    </article>
+  );
+};
+
+/* =========================================================
    FEATURED PRODUCTS
 ========================================================= */
 
@@ -151,8 +203,8 @@ const FeaturedProducts = () => {
   );
 
   /* =======================================================
-     LOAD PRODUCTS FROM BACKEND
-     SHOW CACHE FIRST, UPDATE IN BACKGROUND
+     LOAD PRODUCTS
+     CACHE FIRST + BACKGROUND API UPDATE
   ======================================================= */
 
   useEffect(() => {
@@ -167,28 +219,37 @@ const FeaturedProducts = () => {
           }
         );
 
-        const backendProducts = Array.isArray(
-          response.data?.products
-        )
-          ? response.data.products
-          : Array.isArray(response.data)
-          ? response.data
+        const responseData = response.data;
+
+        const backendProducts = Array.isArray(responseData)
+          ? responseData
+          : Array.isArray(responseData?.products)
+          ? responseData.products
+          : Array.isArray(responseData?.data)
+          ? responseData.data
           : [];
 
-        if (!cancelled) {
-          const featuredProducts = backendProducts.slice(0, 4);
+        const featuredProducts = backendProducts.slice(0, 4);
 
-          setProducts(featuredProducts);
+        if (cancelled) return;
 
+        setProducts(featuredProducts);
+
+        try {
           localStorage.setItem(
             FEATURED_CACHE_KEY,
             JSON.stringify(featuredProducts)
+          );
+        } catch (cacheError) {
+          console.error(
+            "FEATURED CACHE SAVE ERROR:",
+            cacheError
           );
         }
       } catch (error) {
         console.error(
           "FEATURED PRODUCTS LOAD ERROR:",
-          error
+          error.response?.data || error.message
         );
 
         if (!cancelled) {
@@ -234,7 +295,6 @@ const FeaturedProducts = () => {
       loadWishlist
     );
 
-    // Synchronize changes from another browser tab.
     const handleStorage = (event) => {
       if (
         event.key?.startsWith("mamta_wishlist_") ||
@@ -354,32 +414,8 @@ const FeaturedProducts = () => {
   };
 
   /* =======================================================
-     LOADING
-  ======================================================= */
-
-  if (loading && products.length === 0) {
-    return (
-      <section className="featured-products">
-        <div className="featured-container">
-          <div className="featured-heading">
-            <div className="featured-title">
-              <span className="featured-eyebrow">
-                MAAMTA COLLECTION
-              </span>
-
-              <h2>
-                Loved for
-                <span> Comfort</span>
-              </h2>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  /* =======================================================
      RETURN
+     SECTION ALWAYS RENDERS IMMEDIATELY
   ======================================================= */
 
   return (
@@ -388,44 +424,53 @@ const FeaturedProducts = () => {
 
         {/* HEADING */}
 
-        <ScrollReveal direction="down">
-          <div className="featured-heading">
-            <div className="featured-title">
-              <span className="featured-eyebrow">
-                MAAMTA COLLECTION
-              </span>
+        <div className="featured-heading">
+          <div className="featured-title">
+            <span className="featured-eyebrow">
+              MAAMTA COLLECTION
+            </span>
 
-              <h2>
-                Loved for
-                <span> Comfort</span>
-              </h2>
-            </div>
-
-            <div className="featured-intro">
-              <p>
-                Discover thoughtfully designed pillows
-                made to bring softness, comfort and care
-                into everyday moments.
-              </p>
-
-              <Link
-                to="/shop"
-                className="view-all-products"
-              >
-                <span>View All Products</span>
-
-                <ArrowUpRight
-                  size={17}
-                  strokeWidth={1.6}
-                />
-              </Link>
-            </div>
+            <h2>
+              Loved for
+              <span> Comfort</span>
+            </h2>
           </div>
-        </ScrollReveal>
+
+          <div className="featured-intro">
+            <p>
+              Discover thoughtfully designed pillows
+              made to bring softness, comfort and care
+              into everyday moments.
+            </p>
+
+            <Link
+              to="/shop"
+              className="view-all-products"
+            >
+              <span>View All Products</span>
+
+              <ArrowUpRight
+                size={17}
+                strokeWidth={1.6}
+              />
+            </Link>
+          </div>
+        </div>
 
         {/* PRODUCTS GRID */}
 
         <div className="products-grid">
+
+          {/* SHOW SKELETONS ONLY WHEN NO CACHE EXISTS */}
+
+          {loading && products.length === 0 && (
+            [1, 2, 3, 4].map((item) => (
+              <ProductSkeleton key={item} />
+            ))
+          )}
+
+          {/* SHOW PRODUCTS */}
+
           {products.map((product, index) => {
             const productId = getProductId(product);
 
@@ -433,132 +478,133 @@ const FeaturedProducts = () => {
               isInWishlist(productId);
 
             return (
-              <ScrollReveal
+              <article
+                className="product-card"
                 key={productId || index}
-                direction="up"
-                className={`stagger-${index + 1}`}
               >
-                <article className="product-card">
+                {/* PRODUCT IMAGE */}
 
-                  {/* PRODUCT IMAGE */}
+                <div className="product-image">
+                  <img
+                    src={getProductImage(product)}
+                    alt={product.name || "MAAMTA product"}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    fetchPriority={index === 0 ? "high" : "auto"}
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src =
+                        "https://placehold.co/900x900/F4D9DC/4A3032?text=MAAMTA";
+                    }}
+                  />
 
-                  <div className="product-image">
-                    <img
-                      src={getProductImage(product)}
-                      alt={product.name || "MAAMTA product"}
-                      loading="lazy"
-                      decoding="async"
-                      onError={(event) => {
-                        event.currentTarget.onerror = null;
-                        event.currentTarget.src =
-                          "https://placehold.co/900x900/F4D9DC/4A3032?text=MAAMTA";
-                      }}
-                    />
+                  {/* CATEGORY */}
 
-                    {/* CATEGORY */}
+                  <span className="product-badge">
+                    {getProductCategory(product)}
+                  </span>
 
-                    <span className="product-badge">
-                      {getProductCategory(product)}
-                    </span>
+                  {/* WISHLIST */}
 
-                    {/* WISHLIST */}
-
-                    <button
-                      type="button"
-                      className={`wishlist-button ${
-                        productInWishlist ? "active" : ""
-                      }`}
-                      aria-label={
+                  <button
+                    type="button"
+                    className={`wishlist-button ${
+                      productInWishlist ? "active" : ""
+                    }`}
+                    aria-label={
+                      productInWishlist
+                        ? `Remove ${
+                            product.name || "product"
+                          } from wishlist`
+                        : `Add ${
+                            product.name || "product"
+                          } to wishlist`
+                    }
+                    aria-pressed={productInWishlist}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      toggleWishlist(product);
+                    }}
+                  >
+                    <Heart
+                      size={18}
+                      strokeWidth={1.6}
+                      fill={
                         productInWishlist
-                          ? `Remove ${
-                              product.name || "product"
-                            } from wishlist`
-                          : `Add ${
-                              product.name || "product"
-                            } to wishlist`
+                          ? "currentColor"
+                          : "none"
                       }
-                      aria-pressed={productInWishlist}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        toggleWishlist(product);
-                      }}
-                    >
-                      <Heart
-                        size={18}
-                        strokeWidth={1.6}
-                        fill={
-                          productInWishlist
-                            ? "currentColor"
-                            : "none"
-                        }
-                      />
-                    </button>
+                    />
+                  </button>
 
-                    {/* QUICK VIEW */}
+                  {/* QUICK VIEW */}
 
-                    <Link
-                      to={`/product/${productId}`}
-                      className="quick-view"
-                    >
-                      <span>Quick View</span>
+                  <Link
+                    to={`/product/${productId}`}
+                    className="quick-view"
+                  >
+                    <span>Quick View</span>
 
-                      <ArrowUpRight
-                        size={15}
-                        strokeWidth={1.7}
-                      />
-                    </Link>
-                  </div>
+                    <ArrowUpRight
+                      size={15}
+                      strokeWidth={1.7}
+                    />
+                  </Link>
+                </div>
 
-                  {/* PRODUCT INFORMATION */}
+                {/* PRODUCT INFORMATION */}
 
-                  <div className="product-info">
-                    <h3>{product.name}</h3>
+                <div className="product-info">
+                  <h3>{product.name}</h3>
 
-                    {/* RATING */}
+                  {/* RATING */}
 
-                    <div className="product-rating">
-                      <div className="stars">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star
-                            key={star}
-                            size={12}
-                            strokeWidth={1.5}
-                            fill="currentColor"
-                          />
-                        ))}
-                      </div>
-
-                      <span>
-                        {product.rating || "4.9"}
-                      </span>
+                  <div className="product-rating">
+                    <div className="stars">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          size={12}
+                          strokeWidth={1.5}
+                          fill="currentColor"
+                        />
+                      ))}
                     </div>
 
-                    {/* PRICE */}
-
-                    <div className="product-price">
-                      <strong>
-                        {formatPrice(product.price)}
-                      </strong>
-
-                      {product.oldPrice && (
-                        <del>
-                          {formatPrice(product.oldPrice)}
-                        </del>
-                      )}
-                    </div>
+                    <span>
+                      {product.rating || "4.9"}
+                    </span>
                   </div>
-                </article>
-              </ScrollReveal>
+
+                  {/* PRICE */}
+
+                  <div className="product-price">
+                    <strong>
+                      {formatPrice(product.price)}
+                    </strong>
+
+                    {product.oldPrice && (
+                      <del>
+                        {formatPrice(product.oldPrice)}
+                      </del>
+                    )}
+                  </div>
+                </div>
+              </article>
             );
           })}
+
+          {/* EMPTY STATE */}
+
+          {!loading && products.length === 0 && (
+            <p className="featured-empty">
+              Products are currently unavailable.
+              Please visit our shop to explore the collection.
+            </p>
+          )}
+
         </div>
-
-        {/* BOTTOM SHOP CTA */}
-
-        <ScrollReveal direction="up">
-          {/* Add a bottom CTA here if needed. */}
-        </ScrollReveal>
 
       </div>
     </section>
