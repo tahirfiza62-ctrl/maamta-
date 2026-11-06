@@ -17,12 +17,30 @@ import "./Cart.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const Cart = () => {
+  "https://maamta.onrender.com/api";
+
+const Cart = () => {
   const navigate = useNavigate();
 
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
+
+  /* =========================================================
+     AUTHENTICATION HELPER
+  ========================================================= */
+
+  const handleAuthError = () => {
+    localStorage.removeItem("mamta_user_token");
+    localStorage.removeItem("mamta_user");
+
+    localStorage.removeItem("mamta_token");
+    localStorage.removeItem("mamta_user_data");
+
+    window.dispatchEvent(new Event("authChanged"));
+
+    navigate("/login");
+  };
 
   /* =========================================================
      LOAD CART
@@ -40,29 +58,33 @@ const API_URL =
 
     const loadCart = async () => {
       try {
-        const response = await axios.get(`${API_URL}/admin/cart`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await axios.get(
+          `${API_URL}/cart`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (cancelled) return;
 
-        setCart(response.data.cart);
+        setCart(
+          response.data?.cart || { items: [] }
+        );
       } catch (error) {
         if (cancelled) return;
 
         console.error("FETCH CART ERROR:", error);
+        console.error("FETCH CART RESPONSE:", error.response?.data);
 
-        if (error.response?.status === 401) {
-          localStorage.removeItem("mamta_user_token");
-          localStorage.removeItem("mamta_user");
-
-          window.dispatchEvent(
-            new Event("authChanged")
-          );
-
-          navigate("/login");
+        if (
+          error.response?.status === 401 ||
+          error.response?.status === 403
+        ) {
+          handleAuthError();
+        } else {
+          setCart({ items: [] });
         }
       } finally {
         if (!cancelled) {
@@ -89,78 +111,46 @@ const API_URL =
   ) => {
     if (newQuantity < 1) return;
 
-    const token =
-      localStorage.getItem("mamta_user_token");
+    const token = localStorage.getItem("mamta_user_token");
 
     if (!token) {
       navigate("/login");
       return;
     }
 
-    /*
-      The backend identifies a cart item using:
-
-      productId + color
-
-      Therefore color must be sent with
-      every quantity update.
-    */
-
-    const updateKey =
-      `${productId}-${color || "default"}`;
+    const updateKey = `${productId}-${color || "default"}`;
 
     try {
       setUpdatingId(updateKey);
 
       const response = await axios.put(
-        `${API_URL}/admin/cart/update/${productId}`,
+        `${API_URL}/cart/update/${productId}`,
         {
           quantity: Number(newQuantity),
           color: color || "",
         },
         {
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      setCart(response.data.cart);
-
-      window.dispatchEvent(
-        new Event("cartChanged")
+      setCart(
+        response.data?.cart || { items: [] }
       );
 
+      window.dispatchEvent(new Event("cartChanged"));
     } catch (error) {
-      console.error(
-        "UPDATE QUANTITY ERROR:",
-        error
-      );
-
-      console.error(
-        "UPDATE QUANTITY RESPONSE:",
-        error.response?.data
-      );
+      console.error("UPDATE QUANTITY ERROR:", error);
+      console.error("UPDATE QUANTITY RESPONSE:", error.response?.data);
 
       if (
-        error.response?.status === 401
+        error.response?.status === 401 ||
+        error.response?.status === 403
       ) {
-        localStorage.removeItem(
-          "mamta_user_token"
-        );
-
-        localStorage.removeItem(
-          "mamta_user"
-        );
-
-        window.dispatchEvent(
-          new Event("authChanged")
-        );
-
-        navigate("/login");
+        handleAuthError();
       }
-
     } finally {
       setUpdatingId(null);
     }
@@ -174,74 +164,45 @@ const API_URL =
     productId,
     color = ""
   ) => {
-    const token =
-      localStorage.getItem("mamta_user_token");
+    const token = localStorage.getItem("mamta_user_token");
 
     if (!token) {
       navigate("/login");
       return;
     }
 
-    const updateKey =
-      `${productId}-${color || "default"}`;
+    const updateKey = `${productId}-${color || "default"}`;
 
     try {
       setUpdatingId(updateKey);
 
       const response = await axios.delete(
-        `${API_URL}/admin/cart/remove/${productId}`,
+        `${API_URL}/cart/remove/${productId}`,
         {
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
-
-          /*
-            Axios DELETE request body
-            must be inside `data`.
-          */
-
           data: {
             color: color || "",
           },
         }
       );
 
-      setCart(response.data.cart);
-
-      window.dispatchEvent(
-        new Event("cartChanged")
+      setCart(
+        response.data?.cart || { items: [] }
       );
 
+      window.dispatchEvent(new Event("cartChanged"));
     } catch (error) {
-      console.error(
-        "REMOVE ITEM ERROR:",
-        error
-      );
-
-      console.error(
-        "REMOVE ITEM RESPONSE:",
-        error.response?.data
-      );
+      console.error("REMOVE ITEM ERROR:", error);
+      console.error("REMOVE ITEM RESPONSE:", error.response?.data);
 
       if (
-        error.response?.status === 401
+        error.response?.status === 401 ||
+        error.response?.status === 403
       ) {
-        localStorage.removeItem(
-          "mamta_user_token"
-        );
-
-        localStorage.removeItem(
-          "mamta_user"
-        );
-
-        window.dispatchEvent(
-          new Event("authChanged")
-        );
-
-        navigate("/login");
+        handleAuthError();
       }
-
     } finally {
       setUpdatingId(null);
     }
@@ -252,8 +213,7 @@ const API_URL =
   ========================================================= */
 
   const clearCart = async () => {
-    const token =
-      localStorage.getItem("mamta_user_token");
+    const token = localStorage.getItem("mamta_user_token");
 
     if (!token) {
       navigate("/login");
@@ -261,12 +221,13 @@ const API_URL =
     }
 
     try {
+      setUpdatingId("clear-cart");
+
       await axios.delete(
-        `${API_URL}/admin/cart/clear`,
+        `${API_URL}/cart/clear`,
         {
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -275,33 +236,19 @@ const API_URL =
         items: [],
       });
 
-      window.dispatchEvent(
-        new Event("cartChanged")
-      );
-
+      window.dispatchEvent(new Event("cartChanged"));
     } catch (error) {
-      console.error(
-        "CLEAR CART ERROR:",
-        error
-      );
+      console.error("CLEAR CART ERROR:", error);
+      console.error("CLEAR CART RESPONSE:", error.response?.data);
 
       if (
-        error.response?.status === 401
+        error.response?.status === 401 ||
+        error.response?.status === 403
       ) {
-        localStorage.removeItem(
-          "mamta_user_token"
-        );
-
-        localStorage.removeItem(
-          "mamta_user"
-        );
-
-        window.dispatchEvent(
-          new Event("authChanged")
-        );
-
-        navigate("/login");
+        handleAuthError();
       }
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -309,22 +256,22 @@ const API_URL =
      TOTALS
   ========================================================= */
 
-  const items =
-    cart?.items || [];
+  const items = cart?.items || [];
 
-  const subtotal =
-    items.reduce(
-      (total, item) =>
-        total +
-        Number(item.price) *
-          Number(item.quantity),
-      0
-    );
+  const subtotal = items.reduce(
+    (total, item) =>
+      total +
+      Number(item.price || 0) *
+        Number(item.quantity || 0),
+    0
+  );
 
-  const shipping = 0;
+  // Shipping is free for orders of Rs. 5,000 or above.
+  const shipping = subtotal >= 5000 || subtotal === 0
+    ? 0
+    : 250;
 
-  const total =
-    subtotal + shipping;
+  const total = subtotal + shipping;
 
   /* =========================================================
      LOADING
@@ -333,17 +280,13 @@ const API_URL =
   if (loading) {
     return (
       <main className="cart-page">
-
         <div className="cart-loading">
-
           <ShoppingBag size={30} />
 
           <p>
             Loading your cart...
           </p>
-
         </div>
-
       </main>
     );
   }
@@ -357,7 +300,6 @@ const API_URL =
       <main className="cart-page">
 
         <section className="cart-hero">
-
           <div className="cart-hero-content">
 
             <span>
@@ -374,7 +316,6 @@ const API_URL =
             </p>
 
           </div>
-
         </section>
 
         <section className="empty-cart">
@@ -419,7 +360,6 @@ const API_URL =
     <main className="cart-page">
 
       <section className="cart-hero">
-
         <div className="cart-hero-content">
 
           <span>
@@ -436,13 +376,12 @@ const API_URL =
           </p>
 
         </div>
-
       </section>
 
       <section className="cart-container">
 
         {/* =================================================
-           LEFT
+           LEFT SIDE — CART ITEMS
         ================================================= */}
 
         <div className="cart-items-section">
@@ -450,24 +389,21 @@ const API_URL =
           <div className="cart-heading">
 
             <div>
-
               <span>
                 YOUR SELECTION
               </span>
 
               <h2>
                 {items.length}{" "}
-                {items.length === 1
-                  ? "Item"
-                  : "Items"}
+                {items.length === 1 ? "Item" : "Items"}
               </h2>
-
             </div>
 
             <button
               type="button"
               className="clear-cart"
               onClick={clearCart}
+              disabled={updatingId !== null}
             >
               CLEAR CART
             </button>
@@ -476,246 +412,191 @@ const API_URL =
 
           <div className="cart-items">
 
-            {items.map(
-              (
-                item,
-                index
-              ) => {
+            {items.map((item, index) => {
 
-                /*
-                  Unique key for product + color.
+              const productId =
+                item.productId?._id ||
+                item.productId ||
+                item._id ||
+                item.id;
 
-                  This is important when the same product
-                  exists in two different colors.
-                */
+              const itemKey =
+                `${productId}-${item.color || "default"}`;
 
-                const itemKey =
-                  `${item.productId}-${item.color || "default"}`;
+              const isUpdating =
+                updatingId === itemKey ||
+                updatingId === "clear-cart";
 
-                const isUpdating =
-                  updatingId === itemKey;
+              const itemTotal =
+                Number(item.price || 0) *
+                Number(item.quantity || 0);
 
-                return (
-                  <article
-                    className="cart-item"
-                    key={`${itemKey}-${index}`}
-                  >
+              return (
+                <article
+                  className="cart-item"
+                  key={`${itemKey}-${index}`}
+                >
 
-                    {/* =================================================
-                       IMAGE
-                    ================================================= */}
+                  {/* IMAGE */}
 
-                    <div className="cart-item-image">
+                  <div className="cart-item-image">
 
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={
-                            item.name ||
-                            "MAAMTA Product"
-                          }
-                        />
-                      ) : (
-                        <ShoppingBag
-                          size={30}
-                        />
-                      )}
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name || "MAAMTA Product"}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <ShoppingBag size={30} />
+                    )}
 
-                    </div>
+                  </div>
 
-                    {/* =================================================
-                       DETAILS
-                    ================================================= */}
+                  {/* DETAILS */}
 
-                    <div className="cart-item-details">
+                  <div className="cart-item-details">
 
-                      <span className="cart-item-label">
-                        MAAMTA COLLECTION
-                      </span>
+                    <span className="cart-item-label">
+                      MAAMTA COLLECTION
+                    </span>
 
-                      <h3>
-                        {item.name}
-                      </h3>
+                    <h3>
+                      {item.name}
+                    </h3>
 
-                      <p className="cart-item-price">
-                        Rs.{" "}
-                        {Number(
-                          item.price
-                        ).toLocaleString()}
-                      </p>
+                    <p className="cart-item-price">
+                      Rs. {Number(item.price || 0).toLocaleString()}
+                    </p>
 
-                      {/* =================================================
-                         COLOR
-                      ================================================= */}
+                    {/* COLOR */}
 
-                      
-                     {item.color && (
-  <div className="cart-item-color">
-    <span className="color-label">
-      Color
-    </span>
+                    {item.color && (
+                      <div className="cart-item-color">
 
-    <span className="selected-color">
-
-      <span
-        className="color-dot"
-        style={{
-          backgroundColor:
-            item.colorCode || "#e7d8d3",
-        }}
-      />
-
-      {item.color}
-
-    </span>
-  </div>
-)}
-
-                      {/* =================================================
-                         QUANTITY
-                      ================================================= */}
-
-                      <div className="quantity-row">
-
-                        <span>
-                          Quantity
+                        <span className="color-label">
+                          Color
                         </span>
 
-                        <div className="quantity-control">
+                        <span className="selected-color">
 
-                          {/* DECREASE */}
+                          <span
+                            className="color-dot"
+                            style={{
+                              backgroundColor:
+                                item.colorCode || "#e7d8d3",
+                            }}
+                          />
 
-                          <button
-                            type="button"
-                            disabled={
-                              isUpdating ||
-                              Number(
-                                item.quantity
-                              ) <= 1
-                            }
-                            onClick={() =>
-                              updateQuantity(
-                                item.productId,
-                                Number(
-                                  item.quantity
-                                ) - 1,
-                                item.color || ""
-                              )
-                            }
-                            aria-label="Decrease quantity"
-                          >
-                            <Minus
-                              size={14}
-                            />
-                          </button>
+                          {item.color}
 
-                          {/* CURRENT QUANTITY */}
-
-                          <strong>
-                            {item.quantity}
-                          </strong>
-
-                          {/* INCREASE */}
-
-                          <button
-                            type="button"
-                            disabled={
-                              isUpdating
-                            }
-                            onClick={() =>
-                              updateQuantity(
-                                item.productId,
-                                Number(
-                                  item.quantity
-                                ) + 1,
-                                item.color || ""
-                              )
-                            }
-                            aria-label="Increase quantity"
-                          >
-                            <Plus
-                              size={14}
-                            />
-                          </button>
-
-                        </div>
+                        </span>
 
                       </div>
+                    )}
 
-                    </div>
+                    {/* QUANTITY */}
 
-                    {/* =================================================
-                       RIGHT
-                    ================================================= */}
+                    <div className="quantity-row">
 
-                    <div className="cart-item-right">
+                      <span>
+                        Quantity
+                      </span>
 
-                      <strong>
-                      
-                      </strong>
-
-                      {/* =================================================
-                         EDIT + DELETE
-                      ================================================= */}
-
-                      <div className="cart-item-actions">
-
-                        {/* EDIT */}
+                      <div className="quantity-control">
 
                         <button
                           type="button"
-                          className="edit-item"
-                          onClick={() =>
-                            navigate(
-                              `/product/${item.productId}`
-                            )
-                          }
-                          aria-label={`Edit ${
-                            item.name ||
-                            "product"
-                          }`}
-                        >
-                          EDIT
-                        </button>
-
-                        {/* DELETE */}
-
-                        <button
-                          type="button"
-                          className="remove-item"
                           disabled={
-                            isUpdating
+                            isUpdating ||
+                            Number(item.quantity) <= 1
                           }
                           onClick={() =>
-                            removeItem(
-                              item.productId,
+                            updateQuantity(
+                              productId,
+                              Number(item.quantity) - 1,
                               item.color || ""
                             )
                           }
-                          aria-label={`Remove ${
-                            item.name ||
-                            "product"
-                          }`}
+                          aria-label="Decrease quantity"
                         >
-                          <Trash2
-                            size={17}
-                          />
+                          <Minus size={14} />
+                        </button>
+
+                        <strong>
+                          {item.quantity}
+                        </strong>
+
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={() =>
+                            updateQuantity(
+                              productId,
+                              Number(item.quantity) + 1,
+                              item.color || ""
+                            )
+                          }
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={14} />
                         </button>
 
                       </div>
 
                     </div>
 
-                  </article>
-                );
-              }
-            )}
+                  </div>
+
+                  {/* RIGHT SIDE */}
+
+                  <div className="cart-item-right">
+
+                    <strong>
+                      Rs. {itemTotal.toLocaleString()}
+                    </strong>
+
+                    <div className="cart-item-actions">
+
+                      <button
+                        type="button"
+                        className="edit-item"
+                        onClick={() =>
+                          navigate(`/product/${productId}`)
+                        }
+                        aria-label={`Edit ${item.name || "product"}`}
+                      >
+                        EDIT
+                      </button>
+
+                      <button
+                        type="button"
+                        className="remove-item"
+                        disabled={isUpdating}
+                        onClick={() =>
+                          removeItem(
+                            productId,
+                            item.color || ""
+                          )
+                        }
+                        aria-label={`Remove ${item.name || "product"}`}
+                      >
+                        <Trash2 size={17} />
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                </article>
+              );
+            })}
 
           </div>
 
-          {/* =================================================
-             CONTINUE SHOPPING
-          ================================================= */}
+          {/* CONTINUE SHOPPING */}
 
           <Link
             to="/shop"
@@ -728,7 +609,7 @@ const API_URL =
         </div>
 
         {/* =================================================
-           SUMMARY
+           RIGHT SIDE — ORDER SUMMARY
         ================================================= */}
 
         <aside className="cart-summary">
@@ -739,9 +620,7 @@ const API_URL =
               ORDER SUMMARY
             </span>
 
-            <ShoppingBag
-              size={21}
-            />
+            <ShoppingBag size={21} />
 
           </div>
 
@@ -758,8 +637,7 @@ const API_URL =
             </span>
 
             <strong>
-              Rs.{" "}
-              {subtotal.toLocaleString()}
+              Rs. {subtotal.toLocaleString()}
             </strong>
 
           </div>
@@ -772,11 +650,20 @@ const API_URL =
               Shipping
             </span>
 
-            <strong className="free-shipping">
-              FREE SHIPPING
+            <strong>
+              {shipping === 0
+                ? "Included"
+                : `Rs. ${shipping.toLocaleString()}`}
             </strong>
 
           </div>
+
+          {subtotal > 0 && subtotal < 5000 && (
+            <p className="shipping-note">
+              Add Rs. {(5000 - subtotal).toLocaleString()} more
+              to qualify for shipping at no extra cost.
+            </p>
+          )}
 
           <div className="summary-divider" />
 
@@ -789,8 +676,7 @@ const API_URL =
             </span>
 
             <strong>
-              Rs.{" "}
-              {total.toLocaleString()}
+              Rs. {total.toLocaleString()}
             </strong>
 
           </div>
@@ -812,8 +698,7 @@ const API_URL =
             <PackageOpen size={16} />
 
             <span>
-              Free shipping · Secure checkout ·
-              Carefully packed by MAAMTA
+              Secure checkout · Carefully packed by MAAMTA
             </span>
 
           </div>
