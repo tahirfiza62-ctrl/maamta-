@@ -25,7 +25,23 @@ const API_URL =
      INITIAL ORDER
   ========================================================= */
 
-  const initialOrder = location.state?.order || null;
+const storedOrder = (() => {
+  if (!id) return null;
+
+  try {
+    const saved = sessionStorage.getItem(
+      `mamta_recent_order_${id}`
+    );
+
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error("SAVED ORDER READ ERROR:", error);
+    return null;
+  }
+})();
+
+const initialOrder =
+  location.state?.order || storedOrder || null;
 
   const token =
     localStorage.getItem("mamta_user_token");
@@ -79,7 +95,7 @@ const API_URL =
     const fetchOrder = async () => {
       try {
         const response = await axios.get(
-          `${API_URL}/admin/orders/${id}`,
+         `${API_URL}/orders/${id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

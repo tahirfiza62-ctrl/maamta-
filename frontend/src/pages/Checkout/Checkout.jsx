@@ -433,12 +433,25 @@ const Checkout = () => {
 
         window.dispatchEvent(new Event("cartChanged"));
 
-        if (orderId) {
-          navigate(`/order-success/${orderId}`);
-        } else {
-          navigate("/order-success");
-        }
+      
+if (orderId) {
+  // Keep a copy so the confirmation page still works
+  // if the customer refreshes the page.
+  sessionStorage.setItem(
+    `mamta_recent_order_${orderId}`,
+    JSON.stringify(createdOrder)
+  );
 
+  navigate(`/order-success/${orderId}`, {
+    state: {
+      order: createdOrder,
+    },
+  });
+} else {
+  alert(
+    "Your order was placed, but we couldn't retrieve its details."
+  );
+}
         return;
       }
 
