@@ -19,45 +19,86 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://maamta.onrender.com/api";
 
+const GUEST_CART_KEY = "mamta_guest_cart";
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const getProductId = (item) => {
+  const id = item?.productId || item?._id || item?.id;
+
+  if (typeof id === "object" && id !== null) {
+    return String(id._id || id.id || "");
+  }
+
+  return String(id || "");
+};
+
+const getGuestCart = () => {
+  try {
+    const savedCart = JSON.parse(
+      localStorage.getItem(GUEST_CART_KEY) || "[]"
+    );
+
+    if (Array.isArray(savedCart)) {
+      return savedCart;
+    }
+
+    if (Array.isArray(savedCart?.items)) {
+      return savedCart.items;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("READ GUEST CART ERROR:", error);
+    return [];
+  }
+};
+
+const saveGuestCart = (items) => {
+  localStorage.setItem(
+    GUEST_CART_KEY,
+    JSON.stringify(items)
+  );
+};
+
+/* =========================================================
+   CART COMPONENT
+========================================================= */
+
 const Cart = () => {
   const navigate = useNavigate();
 
-  const [cart, setCart] = useState(null);
+  const [cart, setCart] = useState({ items: [] });
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
-
-  /* =========================================================
-     AUTHENTICATION HELPER
-  ========================================================= */
-
-  const handleAuthError = () => {
-    localStorage.removeItem("mamta_user_token");
-    localStorage.removeItem("mamta_user");
-
-    localStorage.removeItem("mamta_token");
-    localStorage.removeItem("mamta_user_data");
-
-    window.dispatchEvent(new Event("authChanged"));
-
-    navigate("/login");
-  };
 
   /* =========================================================
      LOAD CART
   ========================================================= */
 
   useEffect(() => {
-    const token = localStorage.getItem("mamta_user_token");
-
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     let cancelled = false;
 
     const loadCart = async () => {
+      const token = localStorage.getItem("mamta_user_token");
+
       try {
+        setLoading(true);
+
+        // GUEST CUSTOMER
+        if (!token) {
+          const guestItems = getGuestCart();
+
+          if (!cancelled) {
+            setCart({ items: guestItems });
+          }
+
+          return;
+        }
+
+        // LOGGED-IN CUSTOMER
         const response = await axios.get(
           `${API_URL}/cart`,
           {
@@ -69,20 +110,37 @@ const Cart = () => {
 
         if (cancelled) return;
 
-        setCart(
-          response.data?.cart || { items: [] }
-        );
+        const cartData =
+          response.data?.cart || response.data;
+
+        setCart({
+          ...cartData,
+          items: Array.isArray(cartData?.items)
+            ? cartData.items
+            : [],
+        });
       } catch (error) {
         if (cancelled) return;
 
         console.error("FETCH CART ERROR:", error);
-        console.error("FETCH CART RESPONSE:", error.response?.data);
+        console.error(
+          "FETCH CART RESPONSE:",
+          error.response?.data
+        );
 
         if (
           error.response?.status === 401 ||
           error.response?.status === 403
         ) {
-          handleAuthError();
+          // Expired login: switch to guest cart
+          localStorage.removeItem("mamta_user_token");
+          localStorage.removeItem("mamta_user");
+
+          window.dispatchEvent(new Event("authChanged"));
+
+          setCart({
+            items: getGuestCart(),
+          });
         } else {
           setCart({ items: [] });
         }
@@ -95,10 +153,25 @@ const Cart = () => {
 
     loadCart();
 
+    // Refresh when another component changes the cart
+    const handleCartChanged = () => {
+      loadCart();
+    };
+
+    window.addEventListener(
+      "cartChanged",
+      handleCartChanged
+    );
+
     return () => {
       cancelled = true;
+
+      window.removeEventListener(
+        "cartChanged",
+        handleCartChanged
+      );
     };
-  }, [navigate]);
+  }, []);
 
   /* =========================================================
      UPDATE QUANTITY
@@ -113,16 +186,42 @@ const Cart = () => {
 
     const token = localStorage.getItem("mamta_user_token");
 
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     const updateKey = `${productId}-${color || "default"}`;
 
     try {
       setUpdatingId(updateKey);
 
+      // GUEST CUSTOMER
+      if (!token) {
+        const guestItems = getGuestCart();
+
+        const updatedItems = guestItems.map((item) => {
+          const sameProduct =
+            getProductId(item) === String(productId);
+
+          const sameColor =
+            (item.color || "") === (color || "");
+
+          if (sameProduct && sameColor) {
+            return {
+              ...item,
+              quantity: Number(newQuantity),
+            };
+          }
+
+          return item;
+        });
+
+        saveGuestCart(updatedItems);
+
+        setCart({ items: updatedItems });
+
+        window.dispatchEvent(new Event("cartChanged"));
+
+        return;
+      }
+
+      // LOGGED-IN CUSTOMER
       const response = await axios.put(
         `${API_URL}/cart/update/${productId}`,
         {
@@ -136,20 +235,42 @@ const Cart = () => {
         }
       );
 
-      setCart(
-        response.data?.cart || { items: [] }
-      );
+      const cartData =
+        response.data?.cart || response.data;
+
+      setCart({
+        ...cartData,
+        items: Array.isArray(cartData?.items)
+          ? cartData.items
+          : [],
+      });
 
       window.dispatchEvent(new Event("cartChanged"));
     } catch (error) {
       console.error("UPDATE QUANTITY ERROR:", error);
-      console.error("UPDATE QUANTITY RESPONSE:", error.response?.data);
+      console.error(
+        "UPDATE QUANTITY RESPONSE:",
+        error.response?.data
+      );
 
       if (
         error.response?.status === 401 ||
         error.response?.status === 403
       ) {
-        handleAuthError();
+        localStorage.removeItem("mamta_user_token");
+        localStorage.removeItem("mamta_user");
+
+        window.dispatchEvent(new Event("authChanged"));
+
+        const guestItems = getGuestCart();
+        setCart({ items: guestItems });
+
+        toastError("Your session expired. Your guest cart is available.");
+      } else {
+        toastError(
+          error.response?.data?.message ||
+            "Unable to update quantity."
+        );
       }
     } finally {
       setUpdatingId(null);
@@ -166,16 +287,33 @@ const Cart = () => {
   ) => {
     const token = localStorage.getItem("mamta_user_token");
 
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     const updateKey = `${productId}-${color || "default"}`;
 
     try {
       setUpdatingId(updateKey);
 
+      // GUEST CUSTOMER
+      if (!token) {
+        const guestItems = getGuestCart();
+
+        const updatedItems = guestItems.filter(
+          (item) =>
+            !(
+              getProductId(item) === String(productId) &&
+              (item.color || "") === (color || "")
+            )
+        );
+
+        saveGuestCart(updatedItems);
+
+        setCart({ items: updatedItems });
+
+        window.dispatchEvent(new Event("cartChanged"));
+
+        return;
+      }
+
+      // LOGGED-IN CUSTOMER
       const response = await axios.delete(
         `${API_URL}/cart/remove/${productId}`,
         {
@@ -188,20 +326,41 @@ const Cart = () => {
         }
       );
 
-      setCart(
-        response.data?.cart || { items: [] }
-      );
+      const cartData =
+        response.data?.cart || response.data;
+
+      setCart({
+        ...cartData,
+        items: Array.isArray(cartData?.items)
+          ? cartData.items
+          : [],
+      });
 
       window.dispatchEvent(new Event("cartChanged"));
     } catch (error) {
       console.error("REMOVE ITEM ERROR:", error);
-      console.error("REMOVE ITEM RESPONSE:", error.response?.data);
+      console.error(
+        "REMOVE ITEM RESPONSE:",
+        error.response?.data
+      );
 
       if (
         error.response?.status === 401 ||
         error.response?.status === 403
       ) {
-        handleAuthError();
+        localStorage.removeItem("mamta_user_token");
+        localStorage.removeItem("mamta_user");
+
+        window.dispatchEvent(new Event("authChanged"));
+
+        setCart({
+          items: getGuestCart(),
+        });
+      } else {
+        toastError(
+          error.response?.data?.message ||
+            "Unable to remove this product."
+        );
       }
     } finally {
       setUpdatingId(null);
@@ -215,14 +374,21 @@ const Cart = () => {
   const clearCart = async () => {
     const token = localStorage.getItem("mamta_user_token");
 
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     try {
       setUpdatingId("clear-cart");
 
+      // GUEST CUSTOMER
+      if (!token) {
+        saveGuestCart([]);
+
+        setCart({ items: [] });
+
+        window.dispatchEvent(new Event("cartChanged"));
+
+        return;
+      }
+
+      // LOGGED-IN CUSTOMER
       await axios.delete(
         `${API_URL}/cart/clear`,
         {
@@ -232,21 +398,30 @@ const Cart = () => {
         }
       );
 
-      setCart({
-        items: [],
-      });
+      setCart({ items: [] });
 
       window.dispatchEvent(new Event("cartChanged"));
     } catch (error) {
       console.error("CLEAR CART ERROR:", error);
-      console.error("CLEAR CART RESPONSE:", error.response?.data);
+      console.error(
+        "CLEAR CART RESPONSE:",
+        error.response?.data
+      );
 
       if (
         error.response?.status === 401 ||
         error.response?.status === 403
       ) {
-        handleAuthError();
+        localStorage.removeItem("mamta_user_token");
+        localStorage.removeItem("mamta_user");
+
+        window.dispatchEvent(new Event("authChanged"));
       }
+
+      toastError(
+        error.response?.data?.message ||
+          "Unable to clear your cart."
+      );
     } finally {
       setUpdatingId(null);
     }
@@ -256,7 +431,9 @@ const Cart = () => {
      TOTALS
   ========================================================= */
 
-  const items = cart?.items || [];
+  const items = Array.isArray(cart?.items)
+    ? cart.items
+    : [];
 
   const subtotal = items.reduce(
     (total, item) =>
@@ -266,10 +443,10 @@ const Cart = () => {
     0
   );
 
-  // Shipping is free for orders of Rs. 5,000 or above.
-  const shipping = subtotal >= 5000 || subtotal === 0
-    ? 0
-    : 250;
+  const shipping =
+    subtotal >= 5000 || subtotal === 0
+      ? 0
+      : 250;
 
   const total = subtotal + shipping;
 
@@ -283,9 +460,7 @@ const Cart = () => {
         <div className="cart-loading">
           <ShoppingBag size={30} />
 
-          <p>
-            Loading your cart...
-          </p>
+          <p>Loading your cart...</p>
         </div>
       </main>
     );
@@ -298,13 +473,9 @@ const Cart = () => {
   if (items.length === 0) {
     return (
       <main className="cart-page">
-
         <section className="cart-hero">
           <div className="cart-hero-content">
-
-            <span>
-              YOUR MAAMTA BAG
-            </span>
+            <span>YOUR MAAMTA BAG</span>
 
             <h1>
               Your <em>Cart</em>
@@ -314,12 +485,10 @@ const Cart = () => {
               A little space waiting for
               something beautiful.
             </p>
-
           </div>
         </section>
 
         <section className="empty-cart">
-
           <div className="empty-cart-icon">
             <PackageOpen size={38} />
           </div>
@@ -328,9 +497,7 @@ const Cart = () => {
             YOUR CART IS EMPTY
           </span>
 
-          <h2>
-            Nothing here yet
-          </h2>
+          <h2>Nothing here yet</h2>
 
           <p>
             Explore our collection of
@@ -345,9 +512,7 @@ const Cart = () => {
             EXPLORE COLLECTION
             <ArrowRight size={17} />
           </Link>
-
         </section>
-
       </main>
     );
   }
@@ -358,13 +523,9 @@ const Cart = () => {
 
   return (
     <main className="cart-page">
-
       <section className="cart-hero">
         <div className="cart-hero-content">
-
-          <span>
-            YOUR MAAMTA BAG
-          </span>
+          <span>YOUR MAAMTA BAG</span>
 
           <h1>
             Shopping <em>Cart</em>
@@ -374,24 +535,16 @@ const Cart = () => {
             Review your selected pieces
             before continuing to checkout.
           </p>
-
         </div>
       </section>
 
       <section className="cart-container">
-
-        {/* =================================================
-           LEFT SIDE — CART ITEMS
-        ================================================= */}
+        {/* LEFT SIDE — CART ITEMS */}
 
         <div className="cart-items-section">
-
           <div className="cart-heading">
-
             <div>
-              <span>
-                YOUR SELECTION
-              </span>
+              <span>YOUR SELECTION</span>
 
               <h2>
                 {items.length}{" "}
@@ -407,18 +560,11 @@ const Cart = () => {
             >
               CLEAR CART
             </button>
-
           </div>
 
           <div className="cart-items">
-
             {items.map((item, index) => {
-
-              const productId =
-                item.productId?._id ||
-                item.productId ||
-                item._id ||
-                item.id;
+              const productId = getProductId(item);
 
               const itemKey =
                 `${productId}-${item.color || "default"}`;
@@ -436,11 +582,9 @@ const Cart = () => {
                   className="cart-item"
                   key={`${itemKey}-${index}`}
                 >
-
                   {/* IMAGE */}
 
                   <div className="cart-item-image">
-
                     {item.image ? (
                       <img
                         src={item.image}
@@ -452,36 +596,29 @@ const Cart = () => {
                     ) : (
                       <ShoppingBag size={30} />
                     )}
-
                   </div>
 
                   {/* DETAILS */}
 
                   <div className="cart-item-details">
-
                     <span className="cart-item-label">
                       MAAMTA COLLECTION
                     </span>
 
-                    <h3>
-                      {item.name}
-                    </h3>
+                    <h3>{item.name}</h3>
 
                     <p className="cart-item-price">
-                      Rs. {Number(item.price || 0).toLocaleString()}
+                      Rs.{" "}
+                      {Number(item.price || 0).toLocaleString()}
                     </p>
-
-                    {/* COLOR */}
 
                     {item.color && (
                       <div className="cart-item-color">
-
                         <span className="color-label">
                           Color
                         </span>
 
                         <span className="selected-color">
-
                           <span
                             className="color-dot"
                             style={{
@@ -491,22 +628,16 @@ const Cart = () => {
                           />
 
                           {item.color}
-
                         </span>
-
                       </div>
                     )}
 
                     {/* QUANTITY */}
 
                     <div className="quantity-row">
-
-                      <span>
-                        Quantity
-                      </span>
+                      <span>Quantity</span>
 
                       <div className="quantity-control">
-
                         <button
                           type="button"
                           disabled={
@@ -525,9 +656,7 @@ const Cart = () => {
                           <Minus size={14} />
                         </button>
 
-                        <strong>
-                          {item.quantity}
-                        </strong>
+                        <strong>{item.quantity}</strong>
 
                         <button
                           type="button"
@@ -543,23 +672,18 @@ const Cart = () => {
                         >
                           <Plus size={14} />
                         </button>
-
                       </div>
-
                     </div>
-
                   </div>
 
                   {/* RIGHT SIDE */}
 
                   <div className="cart-item-right">
-
                     <strong>
                       Rs. {itemTotal.toLocaleString()}
                     </strong>
 
                     <div className="cart-item-actions">
-
                       <button
                         type="button"
                         className="edit-item"
@@ -585,15 +709,11 @@ const Cart = () => {
                       >
                         <Trash2 size={17} />
                       </button>
-
                     </div>
-
                   </div>
-
                 </article>
               );
             })}
-
           </div>
 
           {/* CONTINUE SHOPPING */}
@@ -605,62 +725,44 @@ const Cart = () => {
             <ArrowLeft size={17} />
             CONTINUE SHOPPING
           </Link>
-
         </div>
 
-        {/* =================================================
-           RIGHT SIDE — ORDER SUMMARY
-        ================================================= */}
+        {/* RIGHT SIDE — ORDER SUMMARY */}
 
         <aside className="cart-summary">
-
           <div className="summary-top">
-
-            <span>
-              ORDER SUMMARY
-            </span>
-
+            <span>ORDER SUMMARY</span>
             <ShoppingBag size={21} />
-
           </div>
 
-          <h2>
-            Your Order
-          </h2>
+          <h2>Your Order</h2>
 
           {/* SUBTOTAL */}
 
           <div className="summary-line">
-
-            <span>
-              Subtotal
-            </span>
+            <span>Subtotal</span>
 
             <strong>
               Rs. {subtotal.toLocaleString()}
             </strong>
-
           </div>
 
           {/* SHIPPING */}
 
           <div className="summary-line">
-
-            <span>
-              Shipping
-            </span>
+            <span>Shipping</span>
 
             <strong>
               {shipping === 0
                 ? "Included"
                 : `Rs. ${shipping.toLocaleString()}`}
             </strong>
-
           </div>
 
           {subtotal > 0 && subtotal < 5000 && (
             <p className="shipping-note">
-              Add Rs. {(5000 - subtotal).toLocaleString()} more
+              Add Rs.{" "}
+              {(5000 - subtotal).toLocaleString()} more
               to qualify for shipping at no extra cost.
             </p>
           )}
@@ -670,15 +772,11 @@ const Cart = () => {
           {/* TOTAL */}
 
           <div className="summary-total">
-
-            <span>
-              Total
-            </span>
+            <span>Total</span>
 
             <strong>
               Rs. {total.toLocaleString()}
             </strong>
-
           </div>
 
           {/* CHECKOUT */}
@@ -694,21 +792,25 @@ const Cart = () => {
           {/* SECURE NOTE */}
 
           <div className="secure-note">
-
             <PackageOpen size={16} />
 
             <span>
               Secure checkout · Carefully packed by MAAMTA
             </span>
-
           </div>
-
         </aside>
-
       </section>
-
     </main>
   );
+};
+
+/* =========================================================
+   SIMPLE ERROR MESSAGE
+========================================================= */
+
+const toastError = (message) => {
+  console.error(message);
+  window.alert(message);
 };
 
 export default Cart;

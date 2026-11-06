@@ -19,7 +19,46 @@ import "./Checkout.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";/* =========================================================
+  "https://maamta.onrender.com/api";
+
+const GUEST_CART_KEY = "mamta_guest_cart";
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const getGuestCart = () => {
+  try {
+    const savedCart = JSON.parse(
+      localStorage.getItem(GUEST_CART_KEY) || "[]"
+    );
+
+    if (Array.isArray(savedCart)) {
+      return savedCart;
+    }
+
+    if (Array.isArray(savedCart?.items)) {
+      return savedCart.items;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("READ GUEST CART ERROR:", error);
+    return [];
+  }
+};
+
+const getProductId = (item) => {
+  const id = item?.productId || item?._id || item?.id;
+
+  if (typeof id === "object" && id !== null) {
+    return String(id._id || id.id || "");
+  }
+
+  return String(id || "");
+};
+
+/* =========================================================
    INITIAL CUSTOMER DETAILS
 ========================================================= */
 
@@ -62,7 +101,7 @@ const Checkout = () => {
      STATES
   ======================================================= */
 
-  const [cart, setCart] = useState(null);
+  const [cart, setCart] = useState({ items: [] });
   const [loading, setLoading] = useState(true);
   const [placingOrder, setPlacingOrder] = useState(false);
 
@@ -71,10 +110,6 @@ const Checkout = () => {
   );
 
   const [formData, setFormData] = useState(getInitialFormData);
-
-  /* =======================================================
-     AUTH
-  ======================================================= */
 
   const token = localStorage.getItem("mamta_user_token");
 
@@ -86,46 +121,63 @@ const Checkout = () => {
     let cancelled = false;
 
     const fetchCart = async () => {
-      if (!token) {
-        navigate("/login");
-        return;
-      }
-
       try {
         setLoading(true);
 
-        const response = await axios.get(
-          `${API_URL}/admin/cart`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const currentToken =
+          localStorage.getItem("mamta_user_token");
 
-        console.log("CHECKOUT CART:", response.data);
-
-        const cartData =
-          response.data?.cart || response.data;
-
-        if (!cancelled) {
-          setCart(cartData);
-        }
-      } catch (error) {
-        console.error("CHECKOUT CART ERROR:", error);
-
-        if (error.response?.status === 401) {
-          localStorage.removeItem("mamta_user_token");
-          localStorage.removeItem("mamta_user");
+        // GUEST CUSTOMER
+        if (!currentToken) {
+          const guestItems = getGuestCart();
 
           if (!cancelled) {
-            navigate("/login");
+            setCart({ items: guestItems });
           }
 
           return;
         }
 
-        if (!cancelled) {
+        // LOGGED-IN CUSTOMER
+        const response = await axios.get(
+          `${API_URL}/cart`,
+          {
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+            },
+          }
+        );
+
+        if (cancelled) return;
+
+        const cartData =
+          response.data?.cart || response.data;
+
+        setCart({
+          ...cartData,
+          items: Array.isArray(cartData?.items)
+            ? cartData.items
+            : [],
+        });
+      } catch (error) {
+        console.error("CHECKOUT CART ERROR:", error);
+
+        if (cancelled) return;
+
+        if (
+          error.response?.status === 401 ||
+          error.response?.status === 403
+        ) {
+          // Expired login: allow guest checkout
+          localStorage.removeItem("mamta_user_token");
+          localStorage.removeItem("mamta_user");
+
+          window.dispatchEvent(new Event("authChanged"));
+
+          setCart({
+            items: getGuestCart(),
+          });
+        } else {
           setCart({ items: [] });
         }
       } finally {
@@ -140,7 +192,7 @@ const Checkout = () => {
     return () => {
       cancelled = true;
     };
-  }, [token, navigate]);
+  }, [token]);
 
   /* =======================================================
      FORM CHANGE
@@ -252,10 +304,11 @@ const Checkout = () => {
 
   /* =======================================================
      ITEMS AND TOTALS
-     FREE SHIPPING ON ALL ORDERS
   ======================================================= */
 
-  const items = Array.isArray(cart?.items) ? cart.items : [];
+  const items = Array.isArray(cart?.items)
+    ? cart.items
+    : [];
 
   const subtotal = items.reduce(
     (total, item) =>
@@ -265,7 +318,11 @@ const Checkout = () => {
     0
   );
 
-  const shipping = 0;
+  const shipping =
+    subtotal >= 5000 || subtotal === 0
+      ? 0
+      : 250;
+
   const total = subtotal + shipping;
 
   /* =======================================================
@@ -296,12 +353,6 @@ const Checkout = () => {
 
     if (placingOrder) return;
 
-    if (!token) {
-      alert("Please login first.");
-      navigate("/login");
-      return;
-    }
-
     if (!validateForm()) return;
 
     if (items.length === 0) {
@@ -310,16 +361,28 @@ const Checkout = () => {
       return;
     }
 
+    const currentToken =
+      localStorage.getItem("mamta_user_token");
+
+    // GUESTS CAN PLACE COD ORDERS.
+    // ONLINE PAYMENT REMAINS LOGIN-ONLY.
+    if (
+      !currentToken &&
+      paymentMethod === "Online Payment"
+    ) {
+      alert(
+        "Please login to use online payment. You can place a Cash on Delivery order without an account."
+      );
+
+      return;
+    }
+
+    // Send product IDs and quantities.
+    // Backend must fetch actual prices and product details.
     const orderItems = items.map((item) => ({
-      productId: item.productId || item._id,
-      name: item.name,
-      image: item.image || "",
-      price: Number(item.price || 0),
+      productId: getProductId(item),
       quantity: Number(item.quantity || 1),
       color: getColorName(item.color),
-      total:
-        Number(item.price || 0) *
-        Number(item.quantity || 1),
     }));
 
     const orderData = {
@@ -330,36 +393,45 @@ const Checkout = () => {
       city: formData.city.trim(),
       landmark: formData.landmark.trim(),
       items: orderItems,
-      subtotal,
-      shipping: 0,
-      total: subtotal,
       paymentMethod,
     };
 
     try {
       setPlacingOrder(true);
 
-      /* CASH ON DELIVERY */
+      /* =================================================
+         CASH ON DELIVERY
+      ================================================= */
 
       if (paymentMethod === "Cash on Delivery") {
+        const config = {};
+
+        if (currentToken) {
+          config.headers = {
+            Authorization: `Bearer ${currentToken}`,
+          };
+        }
+
         const response = await axios.post(
-          `${API_URL}/admin/orders`,
+          `${API_URL}/orders`,
           orderData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+          config
         );
 
         console.log("ORDER CREATED:", response.data);
 
-        window.dispatchEvent(new Event("cartChanged"));
-
         const createdOrder =
           response.data?.order || response.data;
 
-        const orderId = createdOrder?._id || createdOrder?.id;
+        const orderId =
+          createdOrder?._id || createdOrder?.id;
+
+        // Clear guest cart after successful order
+        if (!currentToken) {
+          localStorage.removeItem(GUEST_CART_KEY);
+        }
+
+        window.dispatchEvent(new Event("cartChanged"));
 
         if (orderId) {
           navigate(`/order-success/${orderId}`);
@@ -370,19 +442,24 @@ const Checkout = () => {
         return;
       }
 
-      /* ONLINE PAYMENT */
+      /* =================================================
+         ONLINE PAYMENT — LOGGED-IN CUSTOMERS ONLY
+      ================================================= */
 
       const paymentResponse = await axios.post(
         `${API_URL}/admin/payments/create`,
         orderData,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${currentToken}`,
           },
         }
       );
 
-      console.log("PAYMENT RESPONSE:", paymentResponse.data);
+      console.log(
+        "PAYMENT RESPONSE:",
+        paymentResponse.data
+      );
 
       const paymentUrl =
         paymentResponse.data?.url ||
@@ -397,12 +474,21 @@ const Checkout = () => {
       }
     } catch (error) {
       console.error("CHECKOUT ORDER ERROR:", error);
+      console.error(
+        "CHECKOUT ORDER RESPONSE:",
+        error.response?.data
+      );
 
       if (error.response?.status === 401) {
         localStorage.removeItem("mamta_user_token");
         localStorage.removeItem("mamta_user");
 
-        navigate("/login");
+        window.dispatchEvent(new Event("authChanged"));
+
+        alert(
+          "Your session has expired. You can still place a Cash on Delivery order."
+        );
+
         return;
       }
 
@@ -451,7 +537,10 @@ const Checkout = () => {
             checking out.
           </p>
 
-          <Link to="/shop" className="checkout-back-shop">
+          <Link
+            to="/shop"
+            className="checkout-back-shop"
+          >
             <ArrowLeft size={17} />
             CONTINUE SHOPPING
           </Link>
@@ -470,12 +559,21 @@ const Checkout = () => {
 
       <div className="checkout-header">
         <div>
-          <span className="checkout-eyebrow">MAAMTA</span>
+          <span className="checkout-eyebrow">
+            MAAMTA
+          </span>
+
           <h1>Checkout</h1>
-          <p>Complete your details to place your order.</p>
+
+          <p>
+            Complete your details to place your order.
+          </p>
         </div>
 
-        <Link to="/cart" className="checkout-back-link">
+        <Link
+          to="/cart"
+          className="checkout-back-link"
+        >
           <ArrowLeft size={17} />
           Back to Cart
         </Link>
@@ -507,7 +605,9 @@ const Checkout = () => {
 
             <div className="checkout-form-grid">
               <div className="checkout-field">
-                <label htmlFor="checkout-name">Full Name</label>
+                <label htmlFor="checkout-name">
+                  Full Name
+                </label>
 
                 <div className="checkout-input-wrapper">
                   <User size={17} />
@@ -613,7 +713,9 @@ const Checkout = () => {
               </div>
 
               <div className="checkout-field">
-                <label htmlFor="checkout-city">City</label>
+                <label htmlFor="checkout-city">
+                  City
+                </label>
 
                 <div className="checkout-input-wrapper">
                   <MapPin size={17} />
@@ -684,7 +786,9 @@ const Checkout = () => {
                   type="radio"
                   name="paymentMethod"
                   value="Cash on Delivery"
-                  checked={paymentMethod === "Cash on Delivery"}
+                  checked={
+                    paymentMethod === "Cash on Delivery"
+                  }
                   onChange={(e) =>
                     setPaymentMethod(e.target.value)
                   }
@@ -711,10 +815,25 @@ const Checkout = () => {
                   type="radio"
                   name="paymentMethod"
                   value="Online Payment"
-                  checked={paymentMethod === "Online Payment"}
-                  onChange={(e) =>
-                    setPaymentMethod(e.target.value)
+                  checked={
+                    paymentMethod === "Online Payment"
                   }
+                  onChange={(e) => {
+                    if (
+                      !localStorage.getItem(
+                        "mamta_user_token"
+                      )
+                    ) {
+                      alert(
+                        "Please login to use online payment. Cash on Delivery is available without login."
+                      );
+
+                      setPaymentMethod("Cash on Delivery");
+                      return;
+                    }
+
+                    setPaymentMethod(e.target.value);
+                  }}
                 />
 
                 <div className="checkout-payment-radio">
@@ -723,7 +842,7 @@ const Checkout = () => {
 
                 <div>
                   <strong>Online Payment</strong>
-                  <span>Pay securely online.</span>
+                  <span>Pay securely online. Login required.</span>
                 </div>
               </label>
             </div>
@@ -736,11 +855,14 @@ const Checkout = () => {
             className="checkout-place-order"
             disabled={placingOrder}
           >
-            {placingOrder ? "PROCESSING ORDER..." : "PLACE ORDER"}
+            {placingOrder
+              ? "PROCESSING ORDER..."
+              : "PLACE ORDER"}
           </button>
 
           <div className="checkout-secure">
             <ShieldCheck size={17} />
+
             <span>
               Your information is secure and protected.
             </span>
@@ -770,7 +892,7 @@ const Checkout = () => {
               return (
                 <div
                   className="summary-product"
-                  key={item.productId || item._id || index}
+                  key={`${getProductId(item)}-${item.color || ""}-${index}`}
                 >
                   <div className="summary-product-image">
                     <img
@@ -786,7 +908,9 @@ const Checkout = () => {
                   <div className="summary-product-info">
                     <h3>{item.name}</h3>
 
-                    <p>Rs. {itemPrice.toLocaleString()}</p>
+                    <p>
+                      Rs. {itemPrice.toLocaleString()}
+                    </p>
 
                     {colorName && (
                       <span className="checkout-product-color">
@@ -813,30 +937,66 @@ const Checkout = () => {
           <div className="summary-totals">
             <div>
               <span>Subtotal</span>
-              <strong>Rs. {subtotal.toLocaleString()}</strong>
+
+              <strong>
+                Rs. {subtotal.toLocaleString()}
+              </strong>
             </div>
 
             <div>
               <span>Shipping</span>
-              <strong className="free-shipping">FREE</strong>
+
+              <strong>
+                {shipping === 0
+                  ? "Included"
+                  : `Rs. ${shipping.toLocaleString()}`}
+              </strong>
             </div>
 
             <div className="summary-total">
               <span>Total</span>
-              <strong>Rs. {total.toLocaleString()}</strong>
+
+              <strong>
+                Rs. {total.toLocaleString()}
+              </strong>
             </div>
           </div>
 
-          {/* FREE SHIPPING NOTE */}
+          {/* SHIPPING NOTE */}
 
           <div className="checkout-delivery-note">
             <TruckIcon />
 
             <div>
-              <strong>Free Shipping</strong>
-              <span>Delivery charges are on us!</span>
+              <strong>
+                {shipping === 0
+                  ? "Shipping Included"
+                  : "Shipping Charges"}
+              </strong>
+
+              <span>
+                {shipping === 0
+                  ? "No additional shipping charge."
+                  : `Rs. ${shipping.toLocaleString()} delivery charge.`}
+              </span>
             </div>
           </div>
+
+          {subtotal > 0 && subtotal < 5000 && (
+            <div className="checkout-delivery-note">
+              <ShoppingBag size={20} />
+
+              <div>
+                <strong>Shipping Offer</strong>
+
+                <span>
+                  Add Rs.{" "}
+                  {(5000 - subtotal).toLocaleString()} more
+                  to qualify for shipping at no extra cost.
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* DELIVERY TIME */}
 
@@ -853,6 +1013,7 @@ const Checkout = () => {
 
           <div className="checkout-summary-secure">
             <ShieldCheck size={18} />
+
             <span>Safe &amp; secure checkout</span>
           </div>
         </aside>
