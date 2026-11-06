@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -13,10 +14,20 @@ import {
 
 import axios from "axios";
 import "./Register.css";
+
+/* =========================================================
+   API CONFIGURATION
+========================================================= */
+
 const API_URL = (
   import.meta.env.VITE_API_URL ||
   "https://maamta.onrender.com/api"
 ).replace(/\/+$/, "");
+
+/* =========================================================
+   REGISTER COMPONENT
+========================================================= */
+
 const Register = () => {
   const navigate = useNavigate();
 
@@ -55,6 +66,9 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Prevent duplicate requests
+    if (loading) return;
+
     setError("");
 
     const name = formData.name.trim();
@@ -72,9 +86,10 @@ const Register = () => {
     }
 
     /* =======================================================
-       EMAIL FORMAT
+       EMAIL VALIDATION
     ======================================================= */
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(email)) {
       setError("Please enter a valid email address.");
@@ -106,31 +121,28 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
          REGISTER CUSTOMER
       ===================================================== */
 
-const response = await axios.post(
-  `${API_URL}/auth/register`,
-  {
-    name,
-    email,
-    password,
-  },
-  {
-    headers: {
-      "Content-Type": "application/json",
-    },
-  }
-);
+      const response = await axios.post(
+        `${API_URL}/auth/register`,
+        {
+          name,
+          email,
+          password,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        }
+      );
+
       console.log("REGISTER SUCCESS:", response.data);
 
-      /*
-        IMPORTANT:
-
-        We do NOT save a JWT here.
-
-        The customer must verify their email first.
-      */
-
       /* =====================================================
-         GO TO EMAIL SENT PAGE
+         EMAIL VERIFICATION
+
+         Do not save a JWT here.
+         Customer must verify email first.
       ===================================================== */
 
       navigate("/email-sent", {
@@ -138,35 +150,46 @@ const response = await axios.post(
           email,
         },
       });
+
     } catch (error) {
       console.error("REGISTER ERROR:", error);
       console.error("SERVER RESPONSE:", error.response?.data);
 
-      setError(
-        error.response?.data?.message ||
+      if (error.code === "ECONNABORTED") {
+        setError(
+          "The server is taking too long to respond. Please try again."
+        );
+      } else if (!error.response) {
+        setError(
+          "Unable to connect to the server. Please check your internet connection."
+        );
+      } else {
+        setError(
+          error.response?.data?.message ||
           "Unable to create account. Please try again."
-      );
+        );
+      }
+
     } finally {
       setLoading(false);
     }
   };
 
+  /* =========================================================
+     UI
+  ========================================================= */
+
   return (
     <main className="mamta-register-page">
 
-      {/* =====================================================
-          BACKGROUND DECORATION
-      ===================================================== */}
+      {/* BACKGROUND DECORATION */}
 
       <div className="register-bg-circle register-bg-one"></div>
-
       <div className="register-bg-circle register-bg-two"></div>
 
       <div className="mamta-register-container">
 
-        {/* ===================================================
-            LEFT VISUAL
-        =================================================== */}
+        {/* LEFT VISUAL */}
 
         <section className="register-visual">
 
@@ -206,17 +229,13 @@ const response = await axios.post(
 
         </section>
 
-        {/* ===================================================
-            REGISTER FORM
-        =================================================== */}
+        {/* REGISTER FORM */}
 
         <section className="register-form-panel">
 
           <div className="register-form-wrapper">
 
-            {/* =================================================
-                HEADING
-            ================================================= */}
+            {/* HEADING */}
 
             <div className="register-heading">
 
@@ -233,9 +252,7 @@ const response = await axios.post(
 
             </div>
 
-            {/* =================================================
-                ERROR
-            ================================================= */}
+            {/* ERROR */}
 
             {error && (
               <div
@@ -246,18 +263,14 @@ const response = await axios.post(
               </div>
             )}
 
-            {/* =================================================
-                FORM
-            ================================================= */}
+            {/* FORM */}
 
             <form
               className="mamta-register-form"
               onSubmit={handleSubmit}
             >
 
-              {/* =================================================
-                  NAME
-              ================================================= */}
+              {/* NAME */}
 
               <div className="register-field">
 
@@ -284,9 +297,7 @@ const response = await axios.post(
 
               </div>
 
-              {/* =================================================
-                  EMAIL
-              ================================================= */}
+              {/* EMAIL */}
 
               <div className="register-field">
 
@@ -313,9 +324,7 @@ const response = await axios.post(
 
               </div>
 
-              {/* =================================================
-                  PASSWORD ROW
-              ================================================= */}
+              {/* PASSWORD ROW */}
 
               <div className="register-password-row">
 
@@ -333,11 +342,7 @@ const response = await axios.post(
 
                     <input
                       id="password"
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
+                      type={showPassword ? "text" : "password"}
                       name="password"
                       placeholder="Password"
                       value={formData.password}
@@ -350,9 +355,7 @@ const response = await axios.post(
                       type="button"
                       className="register-eye"
                       onClick={() =>
-                        setShowPassword(
-                          (prev) => !prev
-                        )
+                        setShowPassword((prev) => !prev)
                       }
                       disabled={loading}
                       aria-label={
@@ -387,9 +390,7 @@ const response = await axios.post(
                     <input
                       id="confirmPassword"
                       type={
-                        showConfirmPassword
-                          ? "text"
-                          : "password"
+                        showConfirmPassword ? "text" : "password"
                       }
                       name="confirmPassword"
                       placeholder="Confirm"
@@ -403,9 +404,7 @@ const response = await axios.post(
                       type="button"
                       className="register-eye"
                       onClick={() =>
-                        setShowConfirmPassword(
-                          (prev) => !prev
-                        )
+                        setShowConfirmPassword((prev) => !prev)
                       }
                       disabled={loading}
                       aria-label={
@@ -427,9 +426,7 @@ const response = await axios.post(
 
               </div>
 
-              {/* =================================================
-                  SUBMIT
-              ================================================= */}
+              {/* SUBMIT */}
 
               <button
                 type="submit"
@@ -451,9 +448,7 @@ const response = await axios.post(
 
             </form>
 
-            {/* =================================================
-                LOGIN LINK
-            ================================================= */}
+            {/* LOGIN LINK */}
 
             <p className="register-switch">
               Already have an account?
@@ -463,9 +458,7 @@ const response = await axios.post(
               </Link>
             </p>
 
-            {/* =================================================
-                BACK HOME
-            ================================================= */}
+            {/* BACK HOME */}
 
             <Link
               to="/"
