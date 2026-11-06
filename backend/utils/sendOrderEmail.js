@@ -1,54 +1,16 @@
 
-const nodemailer = require("nodemailer");
-
-console.log("========================================");
-console.log("MAMTA EMAIL MODULE LOADED");
-console.log("EMAIL_USER:", process.env.EMAIL_USER || "NOT FOUND");
-console.log(
-  "EMAIL_PASSWORD:",
-  process.env.EMAIL_PASSWORD ? "FOUND" : "NOT FOUND"
-);
-console.log("========================================");
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  family: 4,
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-});
-
-transporter.verify((error) => {
-  if (error) {
-    console.error("");
-    console.error("❌ MAMTA EMAIL CONNECTION FAILED");
-    console.error("========================================");
-    console.error(error);
-    console.error("========================================");
-  } else {
-    console.log("");
-    console.log("✅ MAMTA EMAIL SERVER IS READY");
-    console.log("Gmail SMTP connection successful.");
-    console.log("");
-  }
-});
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 const sendOrderEmail = async (order) => {
   try {
-    if (!process.env.EMAIL_USER) {
-      throw new Error("EMAIL_USER is missing from backend/.env");
-    }
-
-    if (!process.env.EMAIL_PASSWORD) {
-      throw new Error("EMAIL_PASSWORD is missing from backend/.env");
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY is missing from environment variables.");
     }
 
     if (!order) {
@@ -58,14 +20,6 @@ const sendOrderEmail = async (order) => {
     const orderNumber = order.orderNumber || "N/A";
     const customer = order.customer || {};
     const items = order.items || [];
-
-    const escapeHtml = (value) =>
-      String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
 
     const itemsHtml = items
       .map((item) => {
@@ -273,30 +227,39 @@ const sendOrderEmail = async (order) => {
     `;
 
     console.log("");
-    console.log("📧 SENDING ORDER EMAIL...");
-    console.log("📧 From:", process.env.EMAIL_USER);
-    console.log("📧 To:", "maamtacircle@gmail.com");
-    console.log("📧 Order:", orderNumber);
+    console.log("RESEND: Sending MAMTA order email...");
+    console.log("Order:", orderNumber);
 
-    const info = await transporter.sendMail({
-      from: `"MAMTA" <${process.env.EMAIL_USER}>`,
-      to: "maamtacircle@gmail.com",
-      subject: `🛍️ New MAMTA Order - ${orderNumber}`,
-      html,
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "MAMTA <onboarding@resend.dev>",
+        to: ["maamtacircle@gmail.com"],
+        subject: `New MAMTA Order - ${orderNumber}`,
+        html,
+      }),
+      signal: AbortSignal.timeout(15000),
     });
 
-    console.log("");
-    console.log("========================================");
-    console.log("✅ ORDER EMAIL SENT SUCCESSFULLY");
-    console.log("Message ID:", info.messageId);
-    console.log("Response:", info.response);
-    console.log("========================================");
-    console.log("");
+    const result = await response.json();
 
-    return info;
+    if (!response.ok) {
+      throw new Error(
+        `Resend order email failed: ${JSON.stringify(result)}`
+      );
+    }
+
+    console.log("RESEND: Order email accepted successfully:", result.id);
+
+    return result;
+
   } catch (error) {
     console.error("");
-    console.error("❌ SEND ORDER EMAIL ERROR");
+    console.error("SEND ORDER EMAIL ERROR");
     console.error("========================================");
     console.error(error);
     console.error("========================================");
@@ -307,4 +270,3 @@ const sendOrderEmail = async (order) => {
 };
 
 module.exports = sendOrderEmail;
-

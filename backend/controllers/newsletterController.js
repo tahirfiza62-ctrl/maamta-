@@ -1,6 +1,5 @@
-const mongoose = require("mongoose");
-const nodemailer = require("nodemailer");
 
+const mongoose = require("mongoose");
 
 // =========================================================
 // NEWSLETTER MODEL
@@ -27,20 +26,6 @@ const Newsletter =
 
 
 // =========================================================
-// NODEMAILER
-// =========================================================
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
-
-
-// =========================================================
 // SUBSCRIBE
 // =========================================================
 
@@ -55,39 +40,32 @@ const subscribe = async (req, res) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        message:
-          "Please enter your email address.",
+        message: "Please enter your email address.",
       });
     }
 
-    const cleanEmail =
-      email.trim().toLowerCase();
-
+    const cleanEmail = email.trim().toLowerCase();
 
     // -------------------------------------------------------
     // EMAIL VALIDATION
     // -------------------------------------------------------
 
-    const emailRegex =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({
         success: false,
-        message:
-          "Please enter a valid email address.",
+        message: "Please enter a valid email address.",
       });
     }
-
 
     // -------------------------------------------------------
     // CHECK EXISTING SUBSCRIBER
     // -------------------------------------------------------
 
-    const existingSubscriber =
-      await Newsletter.findOne({
-        email: cleanEmail,
-      });
+    const existingSubscriber = await Newsletter.findOne({
+      email: cleanEmail,
+    });
 
     if (existingSubscriber) {
       return res.status(400).json({
@@ -97,28 +75,36 @@ const subscribe = async (req, res) => {
       });
     }
 
+    // -------------------------------------------------------
+    // CHECK RESEND CONFIGURATION
+    // -------------------------------------------------------
+
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY is missing from environment variables.");
+    }
 
     // -------------------------------------------------------
     // SAVE SUBSCRIBER
     // -------------------------------------------------------
 
-    const subscriber =
-      await Newsletter.create({
-        email: cleanEmail,
-      });
-
+    const subscriber = await Newsletter.create({
+      email: cleanEmail,
+    });
 
     // -------------------------------------------------------
-    // SEND EMAIL TO MAMTA CIRCLE
+    // EMAIL TEMPLATE
     // -------------------------------------------------------
+
+    const escapeHtml = (value) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 
     const mailOptions = {
-      from: `"MAMTA Newsletter" <${process.env.EMAIL_USER}>`,
-
-      to: process.env.NEWSLETTER_EMAIL,
-
-      subject:
-        "New MAMTA Circle Subscriber",
+      subject: "New MAMTA Circle Subscriber",
 
       html: `
         <!DOCTYPE html>
@@ -133,7 +119,6 @@ const subscribe = async (req, res) => {
               content="width=device-width, initial-scale=1.0"
             />
           </head>
-
 
           <body
             style="
@@ -190,7 +175,6 @@ const subscribe = async (req, res) => {
 
               </div>
 
-
               <!-- CONTENT -->
 
               <div
@@ -215,7 +199,6 @@ const subscribe = async (req, res) => {
                   ♡
                 </div>
 
-
                 <h1
                   style="
                     margin:0 0 15px;
@@ -226,7 +209,6 @@ const subscribe = async (req, res) => {
                 >
                   New Circle Subscriber
                 </h1>
-
 
                 <p
                   style="
@@ -239,7 +221,6 @@ const subscribe = async (req, res) => {
                   Someone has just joined the
                   MAMTA Circle.
                 </p>
-
 
                 <div
                   style="
@@ -269,11 +250,10 @@ const subscribe = async (req, res) => {
                       word-break:break-word;
                     "
                   >
-                    ${cleanEmail}
+                    ${escapeHtml(cleanEmail)}
                   </div>
 
                 </div>
-
 
                 <div
                   style="
@@ -290,7 +270,6 @@ const subscribe = async (req, res) => {
                 </div>
 
               </div>
-
 
               <!-- FOOTER -->
 
@@ -315,28 +294,50 @@ const subscribe = async (req, res) => {
       `,
     };
 
-
     // -------------------------------------------------------
-    // SEND EMAIL
+    // SEND EMAIL USING RESEND
     // -------------------------------------------------------
 
     try {
-      await transporter.sendMail(
-        mailOptions
-      );
-    } catch (emailError) {
+      console.log("RESEND: Sending newsletter notification...");
 
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "MAMTA <onboarding@resend.dev>",
+          to: [
+            process.env.NEWSLETTER_EMAIL ||
+            "maamtacircle@gmail.com",
+          ],
+          subject: mailOptions.subject,
+          html: mailOptions.html,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          `Resend newsletter email failed: ${JSON.stringify(result)}`
+        );
+      }
+
+      console.log("RESEND: Newsletter email accepted:", result.id);
+
+    } catch (emailError) {
       console.error(
         "NEWSLETTER EMAIL ERROR:",
         emailError
       );
 
-      // Remove subscriber if notification
-      // email couldn't be sent.
+      // Remove subscriber if notification email couldn't be sent.
 
-      await Newsletter.findByIdAndDelete(
-        subscriber._id
-      );
+      await Newsletter.findByIdAndDelete(subscriber._id);
 
       return res.status(500).json({
         success: false,
@@ -345,25 +346,21 @@ const subscribe = async (req, res) => {
       });
     }
 
-
     // -------------------------------------------------------
     // SUCCESS
     // -------------------------------------------------------
 
     return res.status(201).json({
       success: true,
-
       message:
         "You have successfully joined the MAMTA Circle!",
     });
 
   } catch (error) {
-
     console.error(
       "NEWSLETTER SUBSCRIBE ERROR:",
       error
     );
-
 
     // Duplicate email protection
 
@@ -375,7 +372,6 @@ const subscribe = async (req, res) => {
       });
     }
 
-
     return res.status(500).json({
       success: false,
       message:
@@ -383,7 +379,6 @@ const subscribe = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   subscribe,
