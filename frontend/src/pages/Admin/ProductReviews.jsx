@@ -1,7 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
+
 import {
   Star,
   Search,
@@ -15,52 +24,55 @@ import {
   Package,
   Save,
 } from "lucide-react";
+
 import "./ProductReviews.css";
 
 /* =========================================================
    API CONFIGURATION
-   Same base URL as the other admin pages.
-   Vite:  VITE_API_URL in .env (e.g. http://localhost:5000/api)
-   CRA:   use process.env.REACT_APP_API_URL instead.
-
-   NOTE: the list endpoint is GET /api/admin/reviews/admin/all
-   (confirmed by the backend). Edit and delete use
-   /api/admin/reviews/:id.
 ========================================================= */
 
-const API_BASE =
-  import.meta.env.VITE_API_URL || "https://maamta.onrender.com/api";
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  "https://maamta.onrender.com/api"
+).replace(/\/+$/, "");
 
 const REVIEWS_URL = `${API_BASE}/admin/reviews`;
+
 const LIST_URL = `${REVIEWS_URL}/admin/all`;
 
 const TOKEN_KEY = "mamta_admin_token";
 const USER_KEY = "mamta_admin_user";
-const REQUEST_TIMEOUT = 15000;
+
+const REQUEST_TIMEOUT = 20000;
 
 /* =========================================================
    HELPERS
 ========================================================= */
 
-const getAdminHeaders = () => {
-  const token = localStorage.getItem(TOKEN_KEY);
+const getToken = () => {
+  return localStorage.getItem(TOKEN_KEY);
+};
 
-  return token ? { Authorization: `Bearer ${token}` } : {};
+const getAdminHeaders = () => {
+  const token = getToken();
+
+  if (!token) {
+    throw new Error("ADMIN_SESSION_EXPIRED");
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
 };
 
 const isAuthError = (error) =>
-  error.response?.status === 401 || error.response?.status === 403;
-
-const getReviews = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.reviews)) return data.reviews;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
-};
+  error.response?.status === 401 ||
+  error.response?.status === 403 ||
+  error.message === "ADMIN_SESSION_EXPIRED";
 
 const getErrorMessage = (error) => {
   if (isAuthError(error)) {
-    return "Admin authentication failed. Please sign in again.";
+    return "Your admin session has expired. Please login again.";
   }
 
   if (error.response?.data?.message) {
@@ -68,11 +80,54 @@ const getErrorMessage = (error) => {
   }
 
   if (error.request && !error.response) {
-    return "Cannot reach the server. If it was idle, wait a minute and try again.";
+    return "Cannot connect to the server. Please try again.";
   }
 
   return error.message || "Something went wrong.";
 };
+
+const getReviews = (data) => {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.reviews)) {
+    return data.reviews;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+};
+
+const getReviewId = (review) =>
+  review?._id || review?.id;
+
+const getProductName = (review) => {
+  if (
+    review.productId &&
+    typeof review.productId === "object"
+  ) {
+    return review.productId.name || "Product";
+  }
+
+  if (review.productId) {
+    return `Product ID: ${review.productId}`;
+  }
+
+  return "General testimonial";
+};
+
+const getReviewText = (review) =>
+  review.message ||
+  review.text ||
+  review.review ||
+  "";
+
+const getReviewCity = (review) =>
+  review.city ||
+  review.place ||
+  "";
 
 const formatDate = (date) => {
   if (!date) return "Date unavailable";
@@ -89,23 +144,6 @@ const formatDate = (date) => {
     year: "numeric",
   });
 };
-
-const getProductName = (review) => {
-  if (review.productId && typeof review.productId === "object") {
-    return review.productId.name || "Product";
-  }
-
-  if (review.productId) {
-    return `Product ID: ${review.productId}`;
-  }
-
-  return "General testimonial";
-};
-
-const getReviewText = (review) =>
-  review.message || review.text || review.review || "";
-
-const getReviewCity = (review) => review.city || review.place || "";
 
 const emptyForm = {
   name: "",
@@ -124,14 +162,21 @@ function RatingStars({ rating }) {
 
   return (
     <div className="mamta-admin-review-stars">
+
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
           size={15}
-          fill={star <= numericRating ? "currentColor" : "none"}
+          fill={
+            star <= numericRating
+              ? "currentColor"
+              : "none"
+          }
         />
       ))}
+
       <span>{numericRating}/5</span>
+
     </div>
   );
 }
@@ -143,24 +188,43 @@ function RatingStars({ rating }) {
 export default function Reviews() {
   const navigate = useNavigate();
 
+  const mounted = useRef(false);
+
   const [reviews, setReviews] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
   const [loadError, setLoadError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [ratingFilter, setRatingFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
 
-  const [editingReview, setEditingReview] = useState(null);
-  const [formData, setFormData] = useState({ ...emptyForm });
+  const [ratingFilter, setRatingFilter] =
+    useState("all");
+
+  const [typeFilter, setTypeFilter] =
+    useState("all");
+
+  const [statusFilter, setStatusFilter] =
+    useState("all");
+
+  const [editingReview, setEditingReview] =
+    useState(null);
+
+  const [formData, setFormData] =
+    useState({ ...emptyForm });
+
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
-  const [togglingId, setTogglingId] = useState(null);
 
-  /* Prevents state updates after the page is left */
-  const mounted = useRef(true);
+  const [deletingId, setDeletingId] =
+    useState(null);
+
+  const [togglingId, setTogglingId] =
+    useState(null);
+
+  /* =======================================================
+     MOUNT CHECK
+  ======================================================= */
 
   useEffect(() => {
     mounted.current = true;
@@ -177,49 +241,59 @@ export default function Reviews() {
   const handleAuthFailure = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    navigate("/admin");
+
+    navigate("/admin", { replace: true });
   }, [navigate]);
 
   /* =======================================================
-     FETCH REVIEWS (single source of truth)
-     `isRefresh` shows the small refresh spinner. The initial
-     load uses the full-page loader, which starts as true.
+     FETCH REVIEWS
+
+     GET /api/admin/reviews/admin/all
   ======================================================= */
 
   const fetchReviews = useCallback(
     async (isRefresh = false) => {
-      if (!localStorage.getItem(TOKEN_KEY)) {
-        navigate("/admin");
+      if (!getToken()) {
+        handleAuthFailure();
         return;
       }
 
       if (isRefresh) {
         setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
+      setLoadError("");
+
       try {
-        const response = await axios.get(LIST_URL, {
-          headers: getAdminHeaders(),
-          timeout: REQUEST_TIMEOUT,
-        });
+        const response = await axios.get(
+          LIST_URL,
+          {
+            headers: getAdminHeaders(),
+            timeout: REQUEST_TIMEOUT,
+          }
+        );
 
         if (response.data?.success === false) {
-          throw new Error(response.data.message || "Unable to load reviews.");
+          throw new Error(
+            response.data.message ||
+            "Unable to load reviews."
+          );
         }
 
         if (mounted.current) {
           setReviews(getReviews(response.data));
           setLoadError("");
         }
+
       } catch (error) {
         console.error(
           "ADMIN REVIEWS ERROR:",
           error.response?.data || error.message
         );
 
-        if (!mounted.current) {
-          return;
-        }
+        if (!mounted.current) return;
 
         if (isAuthError(error)) {
           handleAuthFailure();
@@ -230,6 +304,7 @@ export default function Reviews() {
 
         setLoadError(message);
         toast.error(message);
+
       } finally {
         if (mounted.current) {
           setLoading(false);
@@ -237,7 +312,7 @@ export default function Reviews() {
         }
       }
     },
-    [navigate, handleAuthFailure]
+    [handleAuthFailure]
   );
 
   /* =======================================================
@@ -264,13 +339,19 @@ export default function Reviews() {
     const average = total
       ? (
           reviews.reduce(
-            (sum, review) => sum + Number(review.rating || 0),
+            (sum, review) =>
+              sum + Number(review.rating || 0),
             0
           ) / total
         ).toFixed(1)
       : "0.0";
 
-    return { total, approved, pending, average };
+    return {
+      total,
+      approved,
+      pending,
+      average,
+    };
   }, [reviews]);
 
   /* =======================================================
@@ -281,6 +362,7 @@ export default function Reviews() {
     const query = search.trim().toLowerCase();
 
     return reviews.filter((review) => {
+
       const matchesSearch =
         !query ||
         [
@@ -300,24 +382,49 @@ export default function Reviews() {
 
       const matchesRating =
         ratingFilter === "all" ||
-        Number(review.rating) === Number(ratingFilter);
+        Number(review.rating) ===
+          Number(ratingFilter);
 
       const matchesType =
         typeFilter === "all" ||
-        (typeFilter === "product" && Boolean(review.productId)) ||
-        (typeFilter === "general" && !review.productId);
+        (
+          typeFilter === "product" &&
+          Boolean(review.productId)
+        ) ||
+        (
+          typeFilter === "general" &&
+          !review.productId
+        );
 
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "approved" && review.approved !== false) ||
-        (statusFilter === "pending" && review.approved === false);
+        (
+          statusFilter === "approved" &&
+          review.approved !== false
+        ) ||
+        (
+          statusFilter === "pending" &&
+          review.approved === false
+        );
 
-      return matchesSearch && matchesRating && matchesType && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesRating &&
+        matchesType &&
+        matchesStatus
+      );
     });
-  }, [reviews, search, ratingFilter, typeFilter, statusFilter]);
+
+  }, [
+    reviews,
+    search,
+    ratingFilter,
+    typeFilter,
+    statusFilter,
+  ]);
 
   /* =======================================================
-     EDIT REVIEW
+     OPEN EDIT
   ======================================================= */
 
   const openEdit = (review) => {
@@ -332,29 +439,46 @@ export default function Reviews() {
     });
   };
 
-  const closeEdit = useCallback(() => {
+  /* =======================================================
+     CLOSE EDIT
+  ======================================================= */
+
+  const closeEdit = () => {
     if (saving) return;
 
     setEditingReview(null);
     setFormData({ ...emptyForm });
-  }, [saving]);
+  };
 
-  /* Close the edit dialog with the Escape key */
+  /* =======================================================
+     ESCAPE KEY
+  ======================================================= */
+
   useEffect(() => {
-    if (!editingReview) {
-      return undefined;
-    }
+    if (!editingReview) return;
 
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !saving) {
         closeEdit();
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
 
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [editingReview, closeEdit]);
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [editingReview, saving]);
+
+  /* =======================================================
+     FORM CHANGE
+  ======================================================= */
 
   const handleFormChange = (event) => {
     const { name, value } = event.target;
@@ -366,18 +490,18 @@ export default function Reviews() {
   };
 
   /* =======================================================
-     APPLY UPDATED REVIEW
-     Uses the server's copy when it returns one; otherwise
-     reloads the list.
+     UPDATE LOCAL REVIEW
   ======================================================= */
 
   const applyUpdatedReview = async (response) => {
     const updatedReview = response.data?.review;
 
-    if (updatedReview?._id) {
+    if (updatedReview?._id || updatedReview?.id) {
+      const updatedId = getReviewId(updatedReview);
+
       setReviews((previous) =>
         previous.map((review) =>
-          review._id === updatedReview._id
+          getReviewId(review) === updatedId
             ? { ...review, ...updatedReview }
             : review
         )
@@ -389,6 +513,7 @@ export default function Reviews() {
 
   /* =======================================================
      SAVE REVIEW
+
      PUT /api/admin/reviews/:id
   ======================================================= */
 
@@ -397,7 +522,9 @@ export default function Reviews() {
 
     if (saving) return;
 
-    if (!editingReview?._id) {
+    const id = getReviewId(editingReview);
+
+    if (!id) {
       toast.error("Review ID is missing.");
       return;
     }
@@ -408,22 +535,37 @@ export default function Reviews() {
     const rating = Number(formData.rating);
 
     if (name.length < 2 || name.length > 50) {
-      toast.error("Name must contain 2–50 characters.");
+      toast.error(
+        "Name must contain 2–50 characters."
+      );
       return;
     }
 
     if (city.length < 2 || city.length > 50) {
-      toast.error("City must contain 2–50 characters.");
+      toast.error(
+        "City must contain 2–50 characters."
+      );
       return;
     }
 
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      toast.error("Please select a rating from 1 to 5.");
+    if (
+      !Number.isInteger(rating) ||
+      rating < 1 ||
+      rating > 5
+    ) {
+      toast.error(
+        "Please select a rating from 1 to 5."
+      );
       return;
     }
 
-    if (message.length < 10 || message.length > 500) {
-      toast.error("Review must contain 10–500 characters.");
+    if (
+      message.length < 10 ||
+      message.length > 500
+    ) {
+      toast.error(
+        "Review must contain 10–500 characters."
+      );
       return;
     }
 
@@ -431,7 +573,7 @@ export default function Reviews() {
 
     try {
       const response = await axios.put(
-        `${REVIEWS_URL}/${editingReview._id}`,
+        `${REVIEWS_URL}/${id}`,
         {
           name,
           city,
@@ -446,14 +588,21 @@ export default function Reviews() {
       );
 
       if (response.data?.success === false) {
-        throw new Error(response.data.message || "Unable to update review.");
+        throw new Error(
+          response.data.message ||
+          "Unable to update review."
+        );
       }
 
       await applyUpdatedReview(response);
 
       setEditingReview(null);
       setFormData({ ...emptyForm });
-      toast.success("Review updated successfully.");
+
+      toast.success(
+        "Review updated successfully."
+      );
+
     } catch (error) {
       console.error(
         "UPDATE REVIEW ERROR:",
@@ -466,6 +615,7 @@ export default function Reviews() {
       }
 
       toast.error(getErrorMessage(error));
+
     } finally {
       if (mounted.current) {
         setSaving(false);
@@ -475,14 +625,14 @@ export default function Reviews() {
 
   /* =======================================================
      DELETE REVIEW
+
      DELETE /api/admin/reviews/:id
   ======================================================= */
 
   const handleDelete = async (review) => {
-    if (!review?._id) {
-      toast.error("Review ID is missing.");
-      return;
-    }
+    const id = getReviewId(review);
+
+    if (!id || deletingId || togglingId) return;
 
     const confirmed = window.confirm(
       `Delete the review from ${
@@ -492,28 +642,34 @@ export default function Reviews() {
 
     if (!confirmed) return;
 
-    setDeletingId(review._id);
+    setDeletingId(id);
 
     try {
-      const response = await axios.delete(`${REVIEWS_URL}/${review._id}`, {
-        headers: getAdminHeaders(),
-        timeout: REQUEST_TIMEOUT,
-      });
-
-      if (response.data?.success === false) {
-        throw new Error(response.data.message || "Unable to delete review.");
-      }
-
-      setReviews((previous) =>
-        previous.filter((item) => item._id !== review._id)
+      await axios.delete(
+        `${REVIEWS_URL}/${id}`,
+        {
+          headers: getAdminHeaders(),
+          timeout: REQUEST_TIMEOUT,
+        }
       );
 
-      if (editingReview?._id === review._id) {
+      setReviews((previous) =>
+        previous.filter(
+          (item) => getReviewId(item) !== id
+        )
+      );
+
+      if (
+        getReviewId(editingReview) === id
+      ) {
         setEditingReview(null);
         setFormData({ ...emptyForm });
       }
 
-      toast.success("Review deleted successfully.");
+      toast.success(
+        "Review deleted successfully."
+      );
+
     } catch (error) {
       console.error(
         "DELETE REVIEW ERROR:",
@@ -526,6 +682,7 @@ export default function Reviews() {
       }
 
       toast.error(getErrorMessage(error));
+
     } finally {
       if (mounted.current) {
         setDeletingId(null);
@@ -535,19 +692,22 @@ export default function Reviews() {
 
   /* =======================================================
      APPROVE / HIDE REVIEW
+
      PUT /api/admin/reviews/:id
   ======================================================= */
 
   const toggleApproval = async (review) => {
-    if (!review?._id || togglingId) return;
+    const id = getReviewId(review);
+
+    if (!id || togglingId || deletingId) return;
 
     const nextApproved = review.approved === false;
 
-    setTogglingId(review._id);
+    setTogglingId(id);
 
     try {
       const response = await axios.put(
-        `${REVIEWS_URL}/${review._id}`,
+        `${REVIEWS_URL}/${id}`,
         {
           name: review.name,
           city: getReviewCity(review),
@@ -563,15 +723,19 @@ export default function Reviews() {
 
       if (response.data?.success === false) {
         throw new Error(
-          response.data.message || "Unable to update review status."
+          response.data.message ||
+          "Unable to update review status."
         );
       }
 
       await applyUpdatedReview(response);
 
       toast.success(
-        nextApproved ? "Review approved." : "Review hidden from customers."
+        nextApproved
+          ? "Review approved."
+          : "Review hidden from customers."
       );
+
     } catch (error) {
       console.error(
         "UPDATE REVIEW STATUS ERROR:",
@@ -584,6 +748,7 @@ export default function Reviews() {
       }
 
       toast.error(getErrorMessage(error));
+
     } finally {
       if (mounted.current) {
         setTogglingId(null);
@@ -597,13 +762,22 @@ export default function Reviews() {
 
   return (
     <section className="mamta-admin-reviews">
+
+      {/* HEADER */}
+
       <header className="mamta-admin-reviews-header">
+
         <div>
           <span className="mamta-admin-reviews-eyebrow">
             CUSTOMER EXPERIENCE
           </span>
+
           <h1>Reviews Management</h1>
-          <p>Manage customer feedback and product reviews for MAMTA.</p>
+
+          <p>
+            Manage customer feedback and product
+            reviews for MAMTA.
+          </p>
         </div>
 
         <button
@@ -614,17 +788,25 @@ export default function Reviews() {
         >
           <RefreshCw
             size={17}
-            className={refreshing ? "mamta-spin" : ""}
+            className={
+              refreshing ? "mamta-spin" : ""
+            }
           />
-          Refresh
+
+          {refreshing ? "Refreshing..." : "Refresh"}
         </button>
+
       </header>
 
+      {/* STATISTICS */}
+
       <div className="mamta-admin-review-stats">
+
         <article className="mamta-admin-stat-card">
           <span className="mamta-admin-stat-icon">
             <MessageSquare size={21} />
           </span>
+
           <div>
             <span>Total reviews</span>
             <strong>{stats.total}</strong>
@@ -635,6 +817,7 @@ export default function Reviews() {
           <span className="mamta-admin-stat-icon">
             <CheckCircle2 size={21} />
           </span>
+
           <div>
             <span>Approved</span>
             <strong>{stats.approved}</strong>
@@ -645,6 +828,7 @@ export default function Reviews() {
           <span className="mamta-admin-stat-icon">
             <Clock3 size={21} />
           </span>
+
           <div>
             <span>Hidden / pending</span>
             <strong>{stats.pending}</strong>
@@ -655,35 +839,52 @@ export default function Reviews() {
           <span className="mamta-admin-stat-icon">
             <Star size={21} />
           </span>
+
           <div>
             <span>Average rating</span>
+
             <strong>
               {stats.average}
               <small> / 5</small>
             </strong>
           </div>
         </article>
+
       </div>
 
+      {/* SEARCH AND FILTERS */}
+
       <div className="mamta-admin-review-toolbar">
+
         <label className="mamta-admin-review-search">
+
           <Search size={19} />
+
           <input
             type="search"
             placeholder="Search customer, city, product or review..."
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
           />
+
         </label>
 
         <select
           aria-label="Filter by rating"
           value={ratingFilter}
-          onChange={(event) => setRatingFilter(event.target.value)}
+          onChange={(event) =>
+            setRatingFilter(event.target.value)
+          }
         >
           <option value="all">All ratings</option>
+
           {[5, 4, 3, 2, 1].map((rating) => (
-            <option key={rating} value={String(rating)}>
+            <option
+              key={rating}
+              value={String(rating)}
+            >
               {rating} {rating === 1 ? "star" : "stars"}
             </option>
           ))}
@@ -692,41 +893,70 @@ export default function Reviews() {
         <select
           aria-label="Filter by review type"
           value={typeFilter}
-          onChange={(event) => setTypeFilter(event.target.value)}
+          onChange={(event) =>
+            setTypeFilter(event.target.value)
+          }
         >
           <option value="all">All types</option>
           <option value="product">Product reviews</option>
-          <option value="general">General testimonials</option>
+          <option value="general">
+            General testimonials
+          </option>
         </select>
 
         <select
           aria-label="Filter by approval status"
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
+          onChange={(event) =>
+            setStatusFilter(event.target.value)
+          }
         >
           <option value="all">All statuses</option>
           <option value="approved">Approved</option>
-          <option value="pending">Hidden / pending</option>
+          <option value="pending">
+            Hidden / pending
+          </option>
         </select>
+
       </div>
+
+      {/* RESULTS */}
 
       <div className="mamta-admin-review-results">
         <span>
-          Showing <strong>{filteredReviews.length}</strong> of{" "}
-          <strong>{reviews.length}</strong> reviews
+          Showing{" "}
+          <strong>{filteredReviews.length}</strong>
+          {" "}of{" "}
+          <strong>{reviews.length}</strong>
+          {" "}reviews
         </span>
       </div>
 
+      {/* LOADING */}
+
       {loading ? (
+
         <div className="mamta-admin-review-state">
-          <RefreshCw size={25} className="mamta-spin" />
+          <RefreshCw
+            size={25}
+            className="mamta-spin"
+          />
+
           <p>Loading reviews...</p>
         </div>
+
       ) : loadError && reviews.length === 0 ? (
-        <div className="mamta-admin-review-state" role="alert">
+
+        <div
+          className="mamta-admin-review-state"
+          role="alert"
+        >
           <MessageSquare size={34} />
+
           <h3>Unable to load reviews</h3>
+
           <p>{loadError}</p>
+
           <button
             type="button"
             className="mamta-admin-refresh"
@@ -735,20 +965,29 @@ export default function Reviews() {
           >
             <RefreshCw
               size={17}
-              className={refreshing ? "mamta-spin" : ""}
+              className={
+                refreshing ? "mamta-spin" : ""
+              }
             />
+
             Try again
           </button>
         </div>
+
       ) : filteredReviews.length === 0 ? (
+
         <div className="mamta-admin-review-state">
+
           <MessageSquare size={34} />
+
           <h3>No reviews found</h3>
+
           <p>
             {reviews.length
               ? "Try changing your search or filters."
               : "Customer reviews will appear here after they are saved."}
           </p>
+
           <button
             type="button"
             className="mamta-admin-refresh"
@@ -757,62 +996,120 @@ export default function Reviews() {
           >
             <RefreshCw
               size={17}
-              className={refreshing ? "mamta-spin" : ""}
+              className={
+                refreshing ? "mamta-spin" : ""
+              }
             />
+
             Refresh reviews
           </button>
+
         </div>
+
       ) : (
+
+        /* REVIEW CARDS */
+
         <div className="mamta-admin-review-list">
+
           {filteredReviews.map((review) => {
-            const isToggling = togglingId === review._id;
-            const isDeleting = deletingId === review._id;
+            const id = getReviewId(review);
+
+            const isToggling = togglingId === id;
+            const isDeleting = deletingId === id;
 
             return (
-              <article className="mamta-admin-review-card" key={review._id}>
+
+              <article
+                className="mamta-admin-review-card"
+                key={id}
+              >
+
+                {/* CUSTOMER */}
+
                 <div className="mamta-admin-review-card-top">
+
                   <div className="mamta-admin-review-person">
+
                     <div className="mamta-admin-review-avatar">
-                      {(review.name || "C").charAt(0).toUpperCase()}
+                      {(review.name || "C")
+                        .charAt(0)
+                        .toUpperCase()}
                     </div>
+
                     <div>
-                      <h3>{review.name || "Customer"}</h3>
+                      <h3>
+                        {review.name || "Customer"}
+                      </h3>
+
                       <p>
-                        {getReviewCity(review) || "City unavailable"}
-                        {review.email ? ` · ${review.email}` : ""}
+                        {getReviewCity(review) ||
+                          "City unavailable"}
+
+                        {review.email
+                          ? ` · ${review.email}`
+                          : ""}
                       </p>
                     </div>
+
                   </div>
 
                   <span
                     className={`mamta-admin-review-status ${
-                      review.approved === false ? "is-hidden" : "is-approved"
+                      review.approved === false
+                        ? "is-hidden"
+                        : "is-approved"
                     }`}
                   >
-                    {review.approved === false ? "Hidden" : "Approved"}
+                    {review.approved === false
+                      ? "Hidden"
+                      : "Approved"}
                   </span>
+
                 </div>
 
-                <RatingStars rating={review.rating} />
+                {/* RATING */}
+
+                <RatingStars
+                  rating={review.rating}
+                />
+
+                {/* MESSAGE */}
 
                 <p className="mamta-admin-review-message">
                   {getReviewText(review)}
                 </p>
 
+                {/* META */}
+
                 <div className="mamta-admin-review-meta">
+
                   <span>
                     <Package size={15} />
                     {getProductName(review)}
                   </span>
-                  <span>{formatDate(review.createdAt)}</span>
+
+                  <span>
+                    {formatDate(review.createdAt)}
+                  </span>
+
                 </div>
 
+                {/* ACTIONS */}
+
                 <div className="mamta-admin-review-actions">
+
                   <button
                     type="button"
                     className="mamta-admin-action-approval"
-                    onClick={() => toggleApproval(review)}
-                    disabled={isToggling || isDeleting}
+                    onClick={() =>
+                      toggleApproval(review)
+                    }
+                    disabled={
+                      isToggling ||
+                      isDeleting ||
+                      Boolean(deletingId)
+                    }
                   >
                     {isToggling
                       ? "Updating..."
@@ -822,12 +1119,16 @@ export default function Reviews() {
                   </button>
 
                   <div className="mamta-admin-action-group">
+
                     <button
                       type="button"
                       className="mamta-admin-action-edit"
                       onClick={() => openEdit(review)}
-                      disabled={isDeleting}
-                      aria-label={`Edit review by ${review.name || "customer"}`}
+                      disabled={
+                        isDeleting ||
+                        isToggling
+                      }
+                      aria-label="Edit review"
                     >
                       <Pencil size={16} />
                       Edit
@@ -836,42 +1137,68 @@ export default function Reviews() {
                     <button
                       type="button"
                       className="mamta-admin-action-delete"
-                      onClick={() => handleDelete(review)}
-                      disabled={isDeleting}
-                      aria-label={`Delete review by ${
-                        review.name || "customer"
-                      }`}
+                      onClick={() =>
+                        handleDelete(review)
+                      }
+                      disabled={
+                        isDeleting ||
+                        isToggling ||
+                        Boolean(deletingId)
+                      }
+                      aria-label="Delete review"
                     >
                       <Trash2 size={16} />
-                      {isDeleting ? "Deleting..." : "Delete"}
+
+                      {isDeleting
+                        ? "Deleting..."
+                        : "Delete"}
                     </button>
+
                   </div>
+
                 </div>
+
               </article>
             );
           })}
+
         </div>
       )}
 
+      {/* EDIT MODAL */}
+
       {editingReview && (
+
         <div
           className="mamta-review-modal-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeEdit();
+            if (
+              event.target === event.currentTarget
+            ) {
+              closeEdit();
+            }
           }}
         >
+
           <section
             className="mamta-review-edit-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="mamta-review-edit-title"
           >
+
+            {/* MODAL HEADER */}
+
             <div className="mamta-review-modal-heading">
+
               <div>
                 <span className="mamta-admin-reviews-eyebrow">
                   REVIEW MANAGEMENT
                 </span>
-                <h2 id="mamta-review-edit-title">Edit Review</h2>
+
+                <h2 id="mamta-review-edit-title">
+                  Edit Review
+                </h2>
               </div>
 
               <button
@@ -882,12 +1209,21 @@ export default function Reviews() {
               >
                 <X size={21} />
               </button>
+
             </div>
 
-            <form className="mamta-review-edit-form" onSubmit={handleSave}>
+            {/* FORM */}
+
+            <form
+              className="mamta-review-edit-form"
+              onSubmit={handleSave}
+            >
+
               <div className="mamta-review-edit-grid">
+
                 <label>
                   Customer name
+
                   <input
                     name="name"
                     value={formData.name}
@@ -900,6 +1236,7 @@ export default function Reviews() {
 
                 <label>
                   City
+
                   <input
                     name="city"
                     value={formData.city}
@@ -909,10 +1246,12 @@ export default function Reviews() {
                     required
                   />
                 </label>
+
               </div>
 
               <label>
                 Rating
+
                 <select
                   name="rating"
                   value={formData.rating}
@@ -920,8 +1259,12 @@ export default function Reviews() {
                   required
                 >
                   {[5, 4, 3, 2, 1].map((rating) => (
-                    <option key={rating} value={rating}>
-                      {rating} {rating === 1 ? "star" : "stars"}
+                    <option
+                      key={rating}
+                      value={rating}
+                    >
+                      {rating}{" "}
+                      {rating === 1 ? "star" : "stars"}
                     </option>
                   ))}
                 </select>
@@ -929,6 +1272,7 @@ export default function Reviews() {
 
               <label>
                 Review message
+
                 <textarea
                   name="message"
                   value={formData.message}
@@ -938,10 +1282,14 @@ export default function Reviews() {
                   maxLength={500}
                   required
                 />
-                <small>{formData.message.length}/500 characters</small>
+
+                <small>
+                  {formData.message.length}/500 characters
+                </small>
               </label>
 
               <label className="mamta-review-approval-checkbox">
+
                 <input
                   type="checkbox"
                   checked={Boolean(formData.approved)}
@@ -952,10 +1300,15 @@ export default function Reviews() {
                     }))
                   }
                 />
+
                 Show this review to customers
+
               </label>
 
+              {/* MODAL BUTTONS */}
+
               <div className="mamta-review-modal-actions">
+
                 <button
                   type="button"
                   className="mamta-review-cancel"
@@ -971,13 +1324,21 @@ export default function Reviews() {
                   disabled={saving}
                 >
                   <Save size={17} />
-                  {saving ? "Saving..." : "Save changes"}
+
+                  {saving
+                    ? "Saving..."
+                    : "Save changes"}
                 </button>
+
               </div>
+
             </form>
+
           </section>
+
         </div>
       )}
+
     </section>
   );
 }
