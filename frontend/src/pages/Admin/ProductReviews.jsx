@@ -36,7 +36,7 @@ const API_BASE = (
   "https://maamta.onrender.com/api"
 ).replace(/\/+$/, "");
 
-const REVIEWS_URL = `${API_BASE}/admin/reviews`;
+const REVIEWS_URL = `${API_BASE}/reviews`;
 
 const LIST_URL = `${REVIEWS_URL}/admin/all`;
 
