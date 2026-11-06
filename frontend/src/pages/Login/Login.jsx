@@ -108,45 +108,7 @@ const Login = () => {
 
         {/* LEFT SIDE */}
 
-        <section className="auth-brand-panel">
-          <div className="auth-brand-content">
-
-            <div className="auth-brand-mark">
-              <Heart size={18} fill="currentColor" />
-              <span>MAMTA</span>
-            </div>
-
-            <span className="auth-small-label">
-              WELCOME BACK
-            </span>
-
-            <h1>
-              Comfort begins
-              <br />
-              <em>with care.</em>
-            </h1>
-
-            <p>
-              Sign in to continue your MAMTA journey and
-              discover thoughtful comfort for mothers,
-              babies and every little moment.
-            </p>
-
-            <div className="auth-brand-line" />
-
-            <div className="auth-brand-note">
-              <span>01</span>
-
-              <div>
-                <strong>Made with intention</strong>
-                <small>
-                  Soft essentials designed around you.
-                </small>
-              </div>
-            </div>
-
-          </div>
-        </section>
+        
 
         {/* RIGHT SIDE */}
 

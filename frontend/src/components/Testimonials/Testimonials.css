@@ -685,3 +685,38 @@
 .testimonial-slider:hover .testimonial-track {
   animation-play-state: paused;
 }
+
+/* =========================================================
+   MAMTA — TESTIMONIAL MOVEMENT
+========================================================= */
+
+/* Desktop */
+.testimonial-track {
+  animation: testimonialMove 35s linear infinite;
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .testimonial-track {
+    animation-duration: 30s;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .testimonial-track {
+    animation-duration: 25s;
+  }
+}
+
+/* Pause on hover */
+.testimonial-slider:hover .testimonial-track {
+  animation-play-state: paused;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .testimonial-track {
+    animation: none !important;
+  }
+}
