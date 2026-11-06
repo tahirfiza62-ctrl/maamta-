@@ -296,8 +296,7 @@ const createOrder = async (req, res) => {
       (sum, item) => sum + item.total,
       0
     );
-
-    const shipping = subtotal >= 5000 ? 0 : 250;
+const shipping = 0;
 
     const total = subtotal + shipping;
 
@@ -449,16 +448,14 @@ const createOrder = async (req, res) => {
 
 const getMyOrders = async (req, res) => {
   try {
-    const orders = await Order.find({
-      userId: req.user._id,
-    }).sort({
-      createdAt: -1,
-    });
+   const orders = await Order.find({
+  userId: req.user._id,
+}).sort({ createdAt: -1 });
 
-    return res.status(200).json({
-      success: true,
-      orders,
-    });
+return res.status(200).json({
+  success: true,
+  orders,
+});
   } catch (error) {
     console.error("❌ GET MY ORDERS ERROR:", error);
 

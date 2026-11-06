@@ -48,14 +48,16 @@ const API_URL =
         setLoading(true);
         setError("");
 
-        const response = await axios.get(
-          `${API_URL}/admin/orders`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+       const response = await axios.get(
+  `${API_URL}/orders`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
+
+setOrders(response.data.orders || []);
 
         setOrders(response.data.orders || []);
       } catch (err) {
