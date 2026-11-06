@@ -34,9 +34,8 @@ const WISHLIST_KEY = "mamta_wishlist";
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [query, setQuery] = useState(
-    searchParams.get("q") || ""
-  );
+const query = searchParams.get("q") || "";
+const [inputQuery, setInputQuery] = useState(query);
 
   const [products, setProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
@@ -47,9 +46,7 @@ const Search = () => {
      SYNC SEARCH QUERY WITH URL
   ========================================================= */
 
-  useEffect(() => {
-    setQuery(searchParams.get("q") || "");
-  }, [searchParams]);
+
 
   /* =========================================================
      LOAD PRODUCTS FROM PUBLIC API
@@ -164,16 +161,16 @@ const Search = () => {
   ========================================================= */
 
   const handleSearch = (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const trimmedQuery = query.trim();
+  const trimmedQuery = inputQuery.trim();
 
-    if (trimmedQuery) {
-      setSearchParams({ q: trimmedQuery });
-    } else {
-      setSearchParams({});
-    }
-  };
+  if (trimmedQuery) {
+    setSearchParams({ q: trimmedQuery });
+  } else {
+    setSearchParams({});
+  }
+};
 
   /* =========================================================
      FILTER PRODUCTS
@@ -344,24 +341,22 @@ const Search = () => {
               strokeWidth={1.6}
             />
 
-            <input
-              type="text"
-              value={query}
-              onChange={(e) =>
-                setQuery(e.target.value)
-              }
-              placeholder="Search pillows..."
-              autoFocus
-            />
+           <input
+  type="text"
+  value={inputQuery}
+  onChange={(e) => setInputQuery(e.target.value)}
+  placeholder="Search pillows..."
+  autoFocus
+/>
 
             {query && (
               <button
                 type="button"
                 className="search-clear"
-                onClick={() => {
-                  setQuery("");
-                  setSearchParams({});
-                }}
+              onClick={() => {
+  setInputQuery("");
+  setSearchParams({});
+}}
                 aria-label="Clear search"
               >
                 <X size={18} />

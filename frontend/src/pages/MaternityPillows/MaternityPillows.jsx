@@ -115,9 +115,6 @@ const MaternityPillows = () => {
 
   const [maternityProducts, setMaternityProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
-  const [wishlistKey, setWishlistKey] = useState(() =>
-    getWishlistKey(getCurrentUser())
-  );
   const [addingProductId, setAddingProductId] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -169,8 +166,6 @@ const MaternityPillows = () => {
     const refreshWishlist = () => {
       const user = getCurrentUser();
       const key = getWishlistKey(user);
-
-      setWishlistKey(key);
 
       if (!key) {
         setWishlist([]);
@@ -278,7 +273,6 @@ const MaternityPillows = () => {
 
       localStorage.setItem(key, JSON.stringify(updatedWishlist));
 
-      setWishlistKey(key);
       setWishlist(updatedWishlist);
 
       window.dispatchEvent(new Event("wishlistUpdated"));
@@ -386,35 +380,41 @@ const MaternityPillows = () => {
     let guestCart = [];
 
     try {
-      const savedCart = localStorage.getItem(GUEST_CART_KEY);
-      guestCart = savedCart ? JSON.parse(savedCart) : [];
+      const savedCart = JSON.parse(
+        localStorage.getItem(GUEST_CART_KEY) || "[]"
+      );
 
-      if (!Array.isArray(guestCart)) {
-        guestCart = Array.isArray(guestCart?.items)
-          ? guestCart.items
+      guestCart = Array.isArray(savedCart)
+        ? savedCart
+        : Array.isArray(savedCart?.items)
+          ? savedCart.items
           : [];
-      }
     } catch (error) {
       console.error("GUEST CART READ ERROR:", error);
-      guestCart = [];
     }
 
-    const existingItem = guestCart.find(
+    const existingItemIndex = guestCart.findIndex(
       (item) =>
         String(item.productId || item._id || item.id) ===
           String(cartData.productId) &&
         String(item.color || "") === String(cartData.color || "")
     );
 
-    if (existingItem) {
-      existingItem.quantity =
-        Number(existingItem.quantity || 0) +
-        Number(cartData.quantity || 1);
+    if (existingItemIndex !== -1) {
+      guestCart[existingItemIndex] = {
+        ...guestCart[existingItemIndex],
+        quantity:
+          Number(guestCart[existingItemIndex].quantity || 0) +
+          Number(cartData.quantity || 1),
+      };
     } else {
       guestCart.push(cartData);
     }
 
-    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(guestCart));
+    localStorage.setItem(
+      GUEST_CART_KEY,
+      JSON.stringify(guestCart)
+    );
   };
 
   /* =======================================================
@@ -462,7 +462,6 @@ const MaternityPillows = () => {
             throw error;
           }
 
-          localStorage.removeItem("mamta_user_token");
           localStorage.removeItem("mamta_user_token");
           localStorage.removeItem("mamta_user");
           localStorage.removeItem("mamta_token");

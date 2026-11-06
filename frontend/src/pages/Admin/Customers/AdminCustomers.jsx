@@ -97,63 +97,112 @@ const AdminCustomers = () => {
      the full-page loader.
   ======================================================= */
 
-  const fetchCustomers = useCallback(
-    async (isRefresh = false) => {
-      try {
-        if (isRefresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+const fetchCustomers = useCallback(
+  async (isRefresh = false) => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
 
-        setError("");
+      if (!token) {
+        navigate("/admin");
+        return;
+      }
 
-        const token = localStorage.getItem(TOKEN_KEY);
+      const response = await axios.get(CUSTOMERS_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-        if (!token) {
-          navigate("/admin");
-          return;
-        }
+      const data = response.data;
 
-        const response = await axios.get(CUSTOMERS_URL, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+      setCustomers(
+        Array.isArray(data?.customers)
+          ? data.customers
+          : Array.isArray(data)
+          ? data
+          : []
+      );
 
-        const data = response.data;
+      setError("");
+    } catch (err) {
+      console.error("FETCH CUSTOMERS ERROR:", err);
 
-        setCustomers(
-          Array.isArray(data?.customers)
-            ? data.customers
-            : Array.isArray(data)
-            ? data
-            : []
-        );
-      } catch (err) {
-        console.error("FETCH CUSTOMERS ERROR:", err);
+      const code = err.response?.status;
 
-        const code = err.response?.status;
+      if (code === 401 || code === 403) {
+        handleAuthFailure();
+        return;
+      }
 
-        if (code === 401 || code === 403) {
-          handleAuthFailure();
-          return;
-        }
+      setError(getNetworkMessage(err, "Failed to load customers."));
+    } finally {
+      setLoading(false);
 
-        setError(getNetworkMessage(err, "Failed to load customers."));
-      } finally {
-        setLoading(false);
+      if (isRefresh) {
         setRefreshing(false);
       }
-    },
-    [navigate, handleAuthFailure]
-  );
+    }
+  },
+  [navigate, handleAuthFailure]
+);
 
   /* =======================================================
      INITIAL LOAD
   ======================================================= */
 
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+  let cancelled = false;
+
+  const loadCustomers = async () => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+
+      if (!token) {
+        navigate("/admin");
+        return;
+      }
+
+      const response = await axios.get(CUSTOMERS_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (cancelled) return;
+
+      const data = response.data;
+
+      setCustomers(
+        Array.isArray(data?.customers)
+          ? data.customers
+          : Array.isArray(data)
+          ? data
+          : []
+      );
+
+      setError("");
+    } catch (err) {
+      if (cancelled) return;
+
+      console.error("FETCH CUSTOMERS ERROR:", err);
+
+      const code = err.response?.status;
+
+      if (code === 401 || code === 403) {
+        handleAuthFailure();
+        return;
+      }
+
+      setError(getNetworkMessage(err, "Failed to load customers."));
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadCustomers();
+
+  return () => {
+    cancelled = true;
+  };
+}, [navigate, handleAuthFailure]);
 
   /* =======================================================
      SEARCH
@@ -333,7 +382,10 @@ const AdminCustomers = () => {
         <button
           type="button"
           className="customers-refresh-btn"
-          onClick={() => fetchCustomers(true)}
+          onClick={() => {
+  setRefreshing(true);
+  fetchCustomers(true);
+}}
           disabled={refreshing}
         >
           <RefreshCw size={17} className={refreshing ? "refresh-spinning" : ""} />

@@ -138,10 +138,51 @@ const OrderStatusPage = ({ status }) => {
   ======================================================= */
 
   const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
+  try {
+    const token = localStorage.getItem(TOKEN_KEY);
 
+    if (!token) {
+      navigate("/admin");
+      return;
+    }
+
+    const response = await axios.get(ORDERS_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const matching = extractOrders(response.data).filter(
+      (order) => getStatus(order) === status
+    );
+
+    setOrders(matching);
+    setError("");
+  } catch (err) {
+    console.error("FETCH ORDERS ERROR:", err);
+
+    const code = err.response?.status;
+
+    if (code === 401 || code === 403) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      navigate("/admin");
+      return;
+    }
+
+    setError(
+      err.response?.data?.message ||
+        (err.request && !err.response
+          ? "Cannot reach the server. If it was idle, wait a minute and press Refresh."
+          : "Failed to load orders.")
+    );
+  } finally {
+    setLoading(false);
+  }
+}, [status, navigate]);
+useEffect(() => {
+  let cancelled = false;
+
+  const loadOrders = async () => {
+    try {
       const token = localStorage.getItem(TOKEN_KEY);
 
       if (!token) {
@@ -153,13 +194,17 @@ const OrderStatusPage = ({ status }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      /* Keep only orders that match this page's status */
+      if (cancelled) return;
+
       const matching = extractOrders(response.data).filter(
         (order) => getStatus(order) === status
       );
 
       setOrders(matching);
+      setError("");
     } catch (err) {
+      if (cancelled) return;
+
       console.error("FETCH ORDERS ERROR:", err);
 
       const code = err.response?.status;
@@ -178,23 +223,20 @@ const OrderStatusPage = ({ status }) => {
             : "Failed to load orders.")
       );
     } finally {
-      setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+      }
     }
-  }, [status, navigate]);
+  };
 
-  /* =======================================================
-     INITIAL LOAD / STATUS CHANGE
-  ======================================================= */
+  if (config) {
+    loadOrders();
+  }
 
-  useEffect(() => {
-    /* Clear the old list and search when switching status pages */
-    setOrders([]);
-    setSearch("");
-
-    if (config) {
-      fetchOrders();
-    }
-  }, [fetchOrders, config]);
+  return () => {
+    cancelled = true;
+  };
+}, [status, config, navigate]);
 
   /* =======================================================
      SEARCH FILTER

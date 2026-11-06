@@ -861,55 +861,65 @@ I would like to know more about this product.`
          GUEST CART — LOCAL STORAGE
       ====================================================== */
 
-      const saveGuestCart = () => {
-        let guestCart = [];
+      /* =====================================================
+   GUEST CART — LOCAL STORAGE
+====================================================== */
 
-        try {
-          const savedCart = JSON.parse(
-            localStorage.getItem("mamta_guest_cart")
-          );
+const saveGuestCart = () => {
+  const getGuestCart = () => {
+    try {
+      const savedCart = JSON.parse(
+        localStorage.getItem("mamta_guest_cart") || "[]"
+      );
 
-          guestCart = Array.isArray(savedCart)
-            ? savedCart
-            : Array.isArray(savedCart?.items)
-              ? savedCart.items
-              : [];
-        } catch (error) {
-          console.error("GUEST CART ERROR:", error);
-          guestCart = [];
-        }
+      if (Array.isArray(savedCart)) {
+        return savedCart;
+      }
 
-        /* SAME PRODUCT + SAME COLOR */
+      if (Array.isArray(savedCart?.items)) {
+        return savedCart.items;
+      }
 
-        const existingIndex = guestCart.findIndex(
-          (item) =>
-            String(item.productId || item._id) ===
-              String(cartItem.productId) &&
-            String(item.color || "") ===
-              String(cartItem.color || "")
-        );
+      return [];
+    } catch (error) {
+      console.error("GUEST CART ERROR:", error);
+      return [];
+    }
+  };
 
-        if (existingIndex !== -1) {
-          guestCart[existingIndex] = {
-            ...guestCart[existingIndex],
-            ...cartItem,
-            quantity:
-              Number(guestCart[existingIndex].quantity || 0) +
-              cartItem.quantity,
-          };
-        } else {
-          guestCart.push(cartItem);
-        }
+  const guestCart = getGuestCart();
 
-        localStorage.setItem(
-          "mamta_guest_cart",
-          JSON.stringify({
-            items: guestCart,
-          })
-        );
+  /* SAME PRODUCT + SAME COLOR */
 
-        window.dispatchEvent(new Event("cartChanged"));
-      };
+  const existingIndex = guestCart.findIndex(
+    (item) =>
+      String(item.productId || item._id || item.id) ===
+        String(cartItem.productId) &&
+      String(item.color || "") ===
+        String(cartItem.color || "")
+  );
+
+  if (existingIndex !== -1) {
+    guestCart[existingIndex] = {
+      ...guestCart[existingIndex],
+      ...cartItem,
+      quantity:
+        Number(guestCart[existingIndex].quantity || 0) +
+        cartItem.quantity,
+    };
+  } else {
+    guestCart.push(cartItem);
+  }
+
+  localStorage.setItem(
+    "mamta_guest_cart",
+    JSON.stringify({
+      items: guestCart,
+    })
+  );
+
+  window.dispatchEvent(new Event("cartChanged"));
+};
 
       /* =====================================================
          LOGGED-IN CART — BACKEND

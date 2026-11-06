@@ -125,91 +125,248 @@ const AdminCustomerDetails = () => {
      `isCancelled` lets the effect ignore a stale response.
   ======================================================= */
 
-  const fetchCustomer = useCallback(
-    async (isCancelled = () => false) => {
-      try {
-        setLoading(true);
+ 
+/* =======================================================
+   FETCH CUSTOMER DETAILS
+======================================================= */
+
+const fetchCustomer = useCallback(
+  async (isCancelled = () => false) => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+
+      if (!token) {
+        if (!isCancelled()) {
+          navigate("/admin");
+        }
+        return;
+      }
+
+      const response = await axios.get(`${CUSTOMERS_URL}/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (isCancelled()) return;
+
+      const loadedCustomer = response.data?.customer || null;
+
+      const loadedOrders = Array.isArray(response.data?.orders)
+        ? response.data.orders
+        : [];
+
+      setCustomer(loadedCustomer);
+      setOrders(loadedOrders);
+      setTotalOrders(
+        response.data?.totalOrders ?? loadedOrders.length
+      );
+
+      setNotFound(!loadedCustomer);
+      setError("");
+    } catch (err) {
+      if (isCancelled()) return;
+
+      console.error("FETCH CUSTOMER DETAILS ERROR:", err);
+
+      const code = err.response?.status;
+
+      if (code === 401 || code === 403) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        navigate("/admin");
+        return;
+      }
+
+      setCustomer(null);
+      setOrders([]);
+      setTotalOrders(0);
+
+      if (code === 404) {
+        setNotFound(true);
         setError("");
+      } else {
         setNotFound(false);
 
-        const token = localStorage.getItem(TOKEN_KEY);
-
-        if (!token) {
-          navigate("/admin");
-          return;
-        }
-
-        const response = await axios.get(`${CUSTOMERS_URL}/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (isCancelled()) {
-          return;
-        }
-
-        const loadedCustomer = response.data?.customer || null;
-        const loadedOrders = Array.isArray(response.data?.orders)
-          ? response.data.orders
-          : [];
-
-        setCustomer(loadedCustomer);
-        setOrders(loadedOrders);
-        setTotalOrders(response.data?.totalOrders ?? loadedOrders.length);
-
-        if (!loadedCustomer) {
-          setNotFound(true);
-        }
-      } catch (err) {
-        if (isCancelled()) {
-          return;
-        }
-
-        console.error("FETCH CUSTOMER DETAILS ERROR:", err);
-
-        const code = err.response?.status;
-
-        if (code === 401 || code === 403) {
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-          navigate("/admin");
-          return;
-        }
-
-        setCustomer(null);
-
-        if (code === 404) {
-          setNotFound(true);
-        } else {
-          setError(
-            err.response?.data?.message ||
-              (err.request && !err.response
-                ? "Cannot reach the server. If it was idle, wait a minute and try again."
-                : "Failed to load customer details.")
-          );
-        }
-      } finally {
-        if (!isCancelled()) {
-          setLoading(false);
-        }
+        setError(
+          err.response?.data?.message ||
+            (err.request && !err.response
+              ? "Cannot reach the server. If it was idle, wait a minute and try again."
+              : "Failed to load customer details.")
+        );
       }
-    },
-    [id, navigate]
-  );
+    } finally {
+      if (!isCancelled()) {
+        setLoading(false);
+      }
+    }
+  },
+  [id, navigate]
+);
+
+/* =======================================================
+   INITIAL LOAD / ID CHANGE
+======================================================= */
+
+useEffect(() => {
+  let cancelled = false;
+
+  const loadCustomer = async () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+
+    if (!token) {
+      navigate("/admin");
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${CUSTOMERS_URL}/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (cancelled) return;
+
+      const loadedCustomer = response.data?.customer || null;
+
+      const loadedOrders = Array.isArray(response.data?.orders)
+        ? response.data.orders
+        : [];
+
+      setCustomer(loadedCustomer);
+      setOrders(loadedOrders);
+      setTotalOrders(
+        response.data?.totalOrders ?? loadedOrders.length
+      );
+
+      setNotFound(!loadedCustomer);
+      setError("");
+    } catch (err) {
+      if (cancelled) return;
+
+      console.error("FETCH CUSTOMER DETAILS ERROR:", err);
+
+      const code = err.response?.status;
+
+      if (code === 401 || code === 403) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        navigate("/admin");
+        return;
+      }
+
+      setCustomer(null);
+      setOrders([]);
+      setTotalOrders(0);
+
+      if (code === 404) {
+        setNotFound(true);
+        setError("");
+      } else {
+        setNotFound(false);
+
+        setError(
+          err.response?.data?.message ||
+            (err.request && !err.response
+              ? "Cannot reach the server. If it was idle, wait a minute and try again."
+              : "Failed to load customer details.")
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadCustomer();
+
+  return () => {
+    cancelled = true;
+  };
+}, [id, navigate]);
+
 
   /* =======================================================
      INITIAL LOAD / ID CHANGE
   ======================================================= */
 
-  useEffect(() => {
-    let cancelled = false;
+useEffect(() => {
+  let cancelled = false;
 
-    fetchCustomer(() => cancelled);
+  const loadCustomer = async () => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchCustomer]);
+      if (!token) {
+        navigate("/admin");
+        return;
+      }
 
+      const response = await axios.get(`${CUSTOMERS_URL}/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (cancelled) return;
+
+      const loadedCustomer = response.data?.customer || null;
+
+      const loadedOrders = Array.isArray(response.data?.orders)
+        ? response.data.orders
+        : [];
+
+      setCustomer(loadedCustomer);
+      setOrders(loadedOrders);
+      setTotalOrders(
+        response.data?.totalOrders ?? loadedOrders.length
+      );
+
+      setNotFound(!loadedCustomer);
+      setError("");
+    } catch (err) {
+      if (cancelled) return;
+
+      console.error("FETCH CUSTOMER DETAILS ERROR:", err);
+
+      const code = err.response?.status;
+
+      if (code === 401 || code === 403) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        navigate("/admin");
+        return;
+      }
+
+      setCustomer(null);
+      setOrders([]);
+      setTotalOrders(0);
+
+      if (code === 404) {
+        setNotFound(true);
+        setError("");
+      } else {
+        setNotFound(false);
+        setError(
+          err.response?.data?.message ||
+            "Failed to load customer details."
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadCustomer();
+
+  return () => {
+    cancelled = true;
+  };
+}, [id, navigate]);
   /* =======================================================
      LOADING
   ======================================================= */
@@ -290,15 +447,20 @@ const AdminCustomerDetails = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="customer-details-refresh-btn"
-          onClick={() => fetchCustomer()}
-          disabled={loading}
-        >
-          <RefreshCw size={17} />
-          Refresh
-        </button>
+       <button
+  type="button"
+  className="customer-details-refresh-btn"
+  onClick={() => {
+    setLoading(true);
+    setError("");
+    setNotFound(false);
+    fetchCustomer();
+  }}
+  disabled={loading}
+>
+  <RefreshCw size={17} />
+  Refresh
+</button>
       </div>
 
       {/* CUSTOMER PROFILE */}

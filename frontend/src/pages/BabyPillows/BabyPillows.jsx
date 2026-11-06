@@ -95,9 +95,6 @@ const BabyPillows = () => {
 
   const [products, setProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
-  const [wishlistKey, setWishlistKey] = useState(() =>
-    getWishlistKey(getCurrentUser())
-  );
   const [addingProductId, setAddingProductId] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -157,8 +154,6 @@ const BabyPillows = () => {
       const user = getCurrentUser();
       const key = getWishlistKey(user);
 
-      setWishlistKey(key);
-
       if (!key) {
         setWishlist([]);
         return;
@@ -200,7 +195,11 @@ const BabyPillows = () => {
   const isProductInWishlist = (productId) => {
     return wishlist.some(
       (item) =>
-        String(item?._id || item?.id || "") === String(productId)
+        String(
+          typeof item === "string" || typeof item === "number"
+            ? item
+            : item?._id || item?.id || ""
+        ) === String(productId)
     );
   };
 
@@ -236,7 +235,11 @@ const BabyPillows = () => {
 
       const alreadyExists = currentWishlist.some(
         (item) =>
-          String(item?._id || item?.id || "") === String(productId)
+          String(
+            typeof item === "string" || typeof item === "number"
+              ? item
+              : item?._id || item?.id || ""
+          ) === String(productId)
       );
 
       let updatedWishlist;
@@ -244,8 +247,11 @@ const BabyPillows = () => {
       if (alreadyExists) {
         updatedWishlist = currentWishlist.filter(
           (item) =>
-            String(item?._id || item?.id || "") !==
-            String(productId)
+            String(
+              typeof item === "string" || typeof item === "number"
+                ? item
+                : item?._id || item?.id || ""
+            ) !== String(productId)
         );
 
         toast.success(`${product.name} removed from wishlist.`);
@@ -257,7 +263,6 @@ const BabyPillows = () => {
 
       localStorage.setItem(key, JSON.stringify(updatedWishlist));
 
-      setWishlistKey(key);
       setWishlist(updatedWishlist);
 
       window.dispatchEvent(new Event("wishlistUpdated"));
@@ -286,7 +291,6 @@ const BabyPillows = () => {
           : [];
     } catch (error) {
       console.error("GUEST CART READ ERROR:", error);
-      guestCart = [];
     }
 
     const existingItemIndex = guestCart.findIndex(

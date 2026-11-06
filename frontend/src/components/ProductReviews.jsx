@@ -108,14 +108,16 @@ export default function ProductReviews({
      FETCH REVIEWS FOR CURRENT PRODUCT ONLY
   ======================================================= */
 
+/* =======================================================
+   FETCH REVIEWS FOR CURRENT PRODUCT ONLY
+======================================================= */
+
 const loadReviews = useCallback(async () => {
   if (!resolvedProductId) {
     setCustomerReviews([]);
     setLoading(false);
     return;
   }
-
-  setLoading(true);
 
   try {
     const response = await axios.get(`${API_URL}/reviews`, {
@@ -131,9 +133,9 @@ const loadReviews = useCallback(async () => {
     const currentProductReviews = data.filter((review) => {
       const reviewProductId = String(
         review.productId?._id ||
-        review.productId?.id ||
-        review.productId ||
-        ""
+          review.productId?.id ||
+          review.productId ||
+          ""
       );
 
       return reviewProductId === resolvedProductId;
@@ -154,8 +156,62 @@ const loadReviews = useCallback(async () => {
 }, [resolvedProductId]);
 
 useEffect(() => {
-  loadReviews();
-}, [loadReviews]);
+  let isMounted = true;
+
+  const fetchReviews = async () => {
+    if (!resolvedProductId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${API_URL}/reviews`, {
+        params: {
+          productId: resolvedProductId,
+        },
+      });
+
+      const data = Array.isArray(response.data)
+        ? response.data
+        : response.data?.reviews || [];
+
+      const currentProductReviews = data.filter((review) => {
+        const reviewProductId = String(
+          review.productId?._id ||
+            review.productId?.id ||
+            review.productId ||
+            ""
+        );
+
+        return reviewProductId === resolvedProductId;
+      });
+
+      if (isMounted) {
+        setCustomerReviews(currentProductReviews);
+      }
+    } catch (error) {
+      console.error(
+        "Unable to load product reviews:",
+        error.response?.data || error
+      );
+
+      if (isMounted) {
+        setCustomerReviews([]);
+        toast.error("Could not load customer reviews.");
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+  };
+
+  fetchReviews();
+
+  return () => {
+    isMounted = false;
+  };
+}, [resolvedProductId]);
   /* =======================================================
      REVIEW STATISTICS
   ======================================================= */

@@ -147,67 +147,119 @@ const AdminOrders = () => {
      full-page loader.
   ========================================================= */
 
-  const fetchOrders = useCallback(
-    async (isRefresh = false) => {
-      try {
-        if (isRefresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+const fetchOrders = useCallback(
+  async (isRefresh = false) => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
 
-        setError("");
+      if (!token) {
+        navigate("/admin");
+        return;
+      }
 
-        const token = localStorage.getItem(TOKEN_KEY);
+      const response = await fetch(ORDERS_URL, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-        if (!token) {
-          navigate("/admin");
-          return;
-        }
+      if (response.status === 401 || response.status === 403) {
+        handleAuthFailure();
+        return;
+      }
 
-        const response = await fetch(ORDERS_URL, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+      if (!response.ok) {
+        throw new Error("Unable to load orders.");
+      }
 
-        if (response.status === 401 || response.status === 403) {
-          handleAuthFailure();
-          return;
-        }
+      const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error("Unable to load orders.");
-        }
+      setOrders(extractOrders(data));
+      setError("");
+    } catch (err) {
+      console.error("ADMIN ORDERS ERROR:", err);
 
-        const data = await response.json();
+      setError(
+        err instanceof TypeError
+          ? "Cannot reach the server. If it was idle, wait a minute and press Refresh."
+          : err.message || "Unable to load orders."
+      );
+    } finally {
+      setLoading(false);
 
-        setOrders(extractOrders(data));
-      } catch (err) {
-        console.error("ADMIN ORDERS ERROR:", err);
-
-        setError(
-          err instanceof TypeError
-            ? "Cannot reach the server. If it was idle, wait a minute and press Refresh."
-            : err.message || "Unable to load orders."
-        );
-      } finally {
-        setLoading(false);
+      if (isRefresh) {
         setRefreshing(false);
       }
-    },
-    [navigate, handleAuthFailure]
-  );
+    }
+  },
+  [navigate, handleAuthFailure]
+);
 
   /* =========================================================
      INITIAL LOAD
   ========================================================= */
+useEffect(() => {
+  let cancelled = false;
 
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+  const loadOrders = async () => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+
+      if (!token) {
+        navigate("/admin");
+        return;
+      }
+
+      const response = await fetch(ORDERS_URL, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (cancelled) return;
+
+      if (response.status === 401 || response.status === 403) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Unable to load orders.");
+      }
+
+      const data = await response.json();
+
+      if (cancelled) return;
+
+      setOrders(extractOrders(data));
+      setError("");
+    } catch (err) {
+      if (cancelled) return;
+
+      console.error("ADMIN ORDERS ERROR:", err);
+
+      setError(
+        err instanceof TypeError
+          ? "Cannot reach the server. If it was idle, wait a minute and press Refresh."
+          : err.message || "Unable to load orders."
+      );
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadOrders();
+
+  return () => {
+    cancelled = true;
+  };
+}, [navigate, handleAuthFailure]);
 
   /* =========================================================
      DELETE ORDER
