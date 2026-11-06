@@ -32,28 +32,40 @@ const ensureDatabaseConnected = async () => {
 };
 
 /* =========================================================
-   CORS
-   Add your deployed frontend URL in Vercel:
-   FRONTEND_URL=https://your-frontend.vercel.app
+   CORS CONFIGURATION
 ========================================================= */
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
+  "https://maamta.vercel.app",
   "https://mamta-frontend.vercel.app",
-   "https://maamta.vercel.app",
-  
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+];
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests without an Origin header
+      if (!origin) {
         return callback(null, true);
       }
 
+      // Allow listed production and local origins
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        /^https:\/\/maamta-[a-z0-9-]+-tahirfiza62-ctrl\.vercel\.app$/.test(
+          origin
+        );
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+
+      console.log("Blocked CORS origin:", origin);
+
       return callback(new Error("Origin not allowed by CORS"));
     },
+
     credentials: true,
   })
 );
