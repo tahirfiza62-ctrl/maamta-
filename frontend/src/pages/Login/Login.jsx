@@ -52,7 +52,7 @@ const Login = () => {
       setError("");
 
       const response = await axios.post(
-        `${API_URL}/admin/auth/login`,
+        `${API_URL}/auth/login`,
         {
           email: formData.email.trim(),
           password: formData.password,
