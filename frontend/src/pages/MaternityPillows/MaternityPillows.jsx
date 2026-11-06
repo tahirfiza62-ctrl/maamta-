@@ -16,13 +16,16 @@ import ScrollReveal from "../../components/ScrollReveal/ScrollReveal";
 import "./MaternityPillows.css";
 
 /* =========================================================
-   API
+   API + STORAGE
 ========================================================= */
 
 const API_URL = (
   import.meta.env.VITE_API_URL ||
   "https://maamta.onrender.com/api"
 ).replace(/\/+$/, "");
+
+const WISHLIST_KEY = "mamta_wishlist";
+const GUEST_CART_KEY = "mamta_guest_cart";
 
 /* =========================================================
    COMPONENT
@@ -48,16 +51,12 @@ const MaternityPillows = () => {
       try {
         const response = await axios.get(`${API_URL}/products`);
 
-        // Supports both response formats:
-        // { products: [...] }
-        // OR [...]
         const products = Array.isArray(response.data)
           ? response.data
           : Array.isArray(response.data?.products)
             ? response.data.products
             : [];
 
-        // Only show maternity products
         const filteredProducts = products.filter((product) =>
           String(product.category || "")
             .toLowerCase()
@@ -83,8 +82,9 @@ const MaternityPillows = () => {
   useEffect(() => {
     const loadWishlist = () => {
       try {
-        const savedWishlist =
-          JSON.parse(localStorage.getItem("mamta_wishlist")) || [];
+        const savedWishlist = JSON.parse(
+          localStorage.getItem(WISHLIST_KEY) || "[]"
+        );
 
         setWishlist(
           Array.isArray(savedWishlist) ? savedWishlist : []
@@ -98,9 +98,11 @@ const MaternityPillows = () => {
     loadWishlist();
 
     window.addEventListener("wishlistUpdated", loadWishlist);
+    window.addEventListener("storage", loadWishlist);
 
     return () => {
       window.removeEventListener("wishlistUpdated", loadWishlist);
+      window.removeEventListener("storage", loadWishlist);
     };
   }, []);
 
@@ -118,7 +120,8 @@ const MaternityPillows = () => {
 
   const isProductInWishlist = (productId) => {
     return wishlist.some(
-      (item) => (item._id || item.id) === productId
+      (item) =>
+        String(item?._id || item?.id || "") === String(productId)
     );
   };
 
@@ -129,23 +132,32 @@ const MaternityPillows = () => {
   const toggleWishlist = (product) => {
     const productId = product._id || product.id;
 
+    if (!productId) {
+      toast.error("Product information is missing.");
+      return;
+    }
+
     try {
-      const savedWishlist =
-        JSON.parse(localStorage.getItem("mamta_wishlist")) || [];
+      const savedWishlist = JSON.parse(
+        localStorage.getItem(WISHLIST_KEY) || "[]"
+      );
 
       const currentWishlist = Array.isArray(savedWishlist)
         ? savedWishlist
         : [];
 
       const alreadyExists = currentWishlist.some(
-        (item) => (item._id || item.id) === productId
+        (item) =>
+          String(item?._id || item?.id || "") === String(productId)
       );
 
       let updatedWishlist;
 
       if (alreadyExists) {
         updatedWishlist = currentWishlist.filter(
-          (item) => (item._id || item.id) !== productId
+          (item) =>
+            String(item?._id || item?.id || "") !==
+            String(productId)
         );
 
         toast.success(`${product.name} removed from wishlist.`);
@@ -156,7 +168,7 @@ const MaternityPillows = () => {
       }
 
       localStorage.setItem(
-        "mamta_wishlist",
+        WISHLIST_KEY,
         JSON.stringify(updatedWishlist)
       );
 
@@ -282,84 +294,121 @@ const MaternityPillows = () => {
   };
 
   /* =======================================================
-     ADD TO CART
+     ADD ITEM TO GUEST CART
+  ======================================================== */
+
+  const addToGuestCart = (cartData) => {
+    let guestCart = [];
+
+    try {
+      const savedCart = localStorage.getItem(GUEST_CART_KEY);
+
+      guestCart = savedCart ? JSON.parse(savedCart) : [];
+
+      if (!Array.isArray(guestCart)) {
+        guestCart = [];
+      }
+    } catch (error) {
+      console.error("GUEST CART READ ERROR:", error);
+      guestCart = [];
+    }
+
+    const existingItem = guestCart.find(
+      (item) =>
+        String(item.productId) === String(cartData.productId) &&
+        String(item.color || "") === String(cartData.color || "")
+    );
+
+    if (existingItem) {
+      existingItem.quantity =
+        Number(existingItem.quantity || 0) +
+        Number(cartData.quantity || 1);
+    } else {
+      guestCart.push(cartData);
+    }
+
+    localStorage.setItem(
+      GUEST_CART_KEY,
+      JSON.stringify(guestCart)
+    );
+  };
+
+  /* =======================================================
+     ADD TO CART — GUEST + LOGGED-IN USERS
   ======================================================== */
 
   const addToCart = async (product, buttonElement) => {
-    // Check login
-    const token = localStorage.getItem("mamta_user_token");
-
-    if (!token) {
-      toast.error(
-        "Please login before adding items to your cart."
-      );
-
-      navigate("/login");
-      return;
-    }
-
-    // Get product ID
-    const productId = product._id || product.id;
+    const productId = product?._id || product?.id;
 
     if (!productId) {
       toast.error("Product ID is missing.");
       return;
     }
 
-    // Prevent double click
-    if (addingProductId === productId) {
+    if (String(addingProductId) === String(productId)) {
       return;
     }
+
+    const cartData = {
+      productId: String(productId),
+      name: product.name || "",
+      image: product.image || "",
+      price: Number(product.price || 0),
+      quantity: 1,
+      color: "",
+      colorCode: "",
+      colorImage: "",
+    };
 
     try {
       setAddingProductId(productId);
 
-      // Send product to backend
-      await axios.post(
-        `${API_URL}/cart/add`,
-        {
-          productId: productId,
-          name: product.name,
-          image: product.image,
-          price: product.price,
-          quantity: 1,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const token = localStorage.getItem("mamta_user_token");
+
+      if (token) {
+        try {
+          await axios.post(
+            `${API_URL}/cart/add`,
+            cartData,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+        } catch (error) {
+          // Expired or invalid session:
+          // use the guest cart instead.
+
+          if (
+            error.response?.status !== 401 &&
+            error.response?.status !== 403
+          ) {
+            throw error;
+          }
+
+          localStorage.removeItem("mamta_user_token");
+          localStorage.removeItem("mamta_user");
+
+          addToGuestCart(cartData);
+
+          window.dispatchEvent(new Event("authChanged"));
         }
-      );
+      } else {
+        // Guest user
+        addToGuestCart(cartData);
+      }
 
-      // Start animation only after successful request
-      animateToCart(buttonElement);
-
-      // Update header cart count
+      // Update header cart count and other components
       window.dispatchEvent(new Event("cartChanged"));
 
-      // Success message
+      // Cart animation
+      animateToCart(buttonElement);
+
       toast.success(`${product.name} added to cart.`);
     } catch (error) {
       console.error("ADD TO CART ERROR:", error);
 
-      // Token expired or invalid
-      if (error.response?.status === 401) {
-        localStorage.removeItem("mamta_user_token");
-        localStorage.removeItem("mamta_user");
-        localStorage.removeItem("mamta_token");
-        localStorage.removeItem("mamta_user_data");
-
-        window.dispatchEvent(new Event("authChanged"));
-
-        toast.error(
-          "Your session has expired. Please login again."
-        );
-
-        navigate("/login");
-        return;
-      }
-
-      // Other errors
       toast.error(
         error.response?.data?.message ||
           "Unable to add product to cart."
@@ -660,11 +709,13 @@ const MaternityPillows = () => {
                         onClick={(e) =>
                           addToCart(product, e.currentTarget)
                         }
-                        disabled={addingProductId === productId}
+                        disabled={
+                          String(addingProductId) === String(productId)
+                        }
                       >
                         <ShoppingBag size={16} />
 
-                        {addingProductId === productId
+                        {String(addingProductId) === String(productId)
                           ? "Adding..."
                           : "Add to cart"}
                       </button>
@@ -712,6 +763,15 @@ const MaternityPillows = () => {
           })}
 
         </div>
+
+        {/* EMPTY STATE */}
+
+        {maternityProducts.length === 0 && (
+          <div className="no-products">
+            <h3>No maternity products available</h3>
+            <p>Please check back soon for our collection.</p>
+          </div>
+        )}
 
       </section>
 

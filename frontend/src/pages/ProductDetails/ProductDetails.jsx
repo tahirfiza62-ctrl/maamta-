@@ -1452,10 +1452,10 @@ I would like to know more about this product.`
 
       {/* PRODUCT REVIEWS */}
 
-      <ProductReviews
-        key={product?._id || product?.id || id}
-        productId={product?._id || product?.id || id}
-      />
+     <ProductReviews
+  key={product?._id || product?.id || id}
+  productId={product?._id || product?.id || id}
+/>
 
       {/* PRODUCT FEATURES */}
 

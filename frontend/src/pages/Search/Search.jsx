@@ -13,22 +13,35 @@ import {
 
 import "./Search.css";
 
-const API_URL =
+/* =========================================================
+   API
+========================================================= */
+
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";
+  "https://maamta.onrender.com/api"
+).replace(/\/+$/, "");
 
 const PLACEHOLDER_IMAGE =
   "https://placehold.co/700x700/F4D9DC/4A3032?text=MAMTA";
 
+const WISHLIST_KEY = "mamta_wishlist";
+
+/* =========================================================
+   COMPONENT
+========================================================= */
+
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const initialQuery = searchParams.get("q") || "";
+  const [query, setQuery] = useState(
+    searchParams.get("q") || ""
+  );
 
-  const [query, setQuery] = useState(initialQuery);
   const [products, setProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   /* =========================================================
      SYNC SEARCH QUERY WITH URL
@@ -39,7 +52,7 @@ const Search = () => {
   }, [searchParams]);
 
   /* =========================================================
-     LOAD PRODUCTS
+     LOAD PRODUCTS FROM PUBLIC API
   ========================================================= */
 
   useEffect(() => {
@@ -47,24 +60,40 @@ const Search = () => {
 
     const fetchProducts = async () => {
       try {
+        setLoading(true);
+        setLoadError(false);
+
+        // Use the same public endpoint as the Shop page.
         const response = await axios.get(
-          `${API_URL}/admin/products`
+          `${API_URL}/products`
         );
 
         if (cancelled) return;
 
         const data = response.data;
 
-        const productList =
-          data?.products ||
-          data?.data ||
-          [];
+        // Support different backend response formats.
+        let productList = [];
 
-        const validProducts = Array.isArray(productList)
-          ? productList.filter(
-              (product) => product.active !== false
-            )
-          : [];
+        if (Array.isArray(data)) {
+          productList = data;
+        } else if (Array.isArray(data?.products)) {
+          productList = data.products;
+        } else if (Array.isArray(data?.data)) {
+          productList = data.data;
+        } else if (Array.isArray(data?.data?.products)) {
+          productList = data.data.products;
+        }
+
+        console.log("SEARCH API RESPONSE:", data);
+        console.log("SEARCH PRODUCTS:", productList);
+
+        const validProducts = productList.filter(
+          (product) =>
+            product &&
+            product.active !== false &&
+            (product._id || product.id)
+        );
 
         setProducts(validProducts);
       } catch (error) {
@@ -72,10 +101,11 @@ const Search = () => {
 
         console.error(
           "SEARCH PRODUCTS ERROR:",
-          error
+          error.response?.data || error.message
         );
 
         setProducts([]);
+        setLoadError(true);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -98,7 +128,7 @@ const Search = () => {
     const loadWishlist = () => {
       try {
         const saved = JSON.parse(
-          localStorage.getItem("mamta_wishlist") || "[]"
+          localStorage.getItem(WISHLIST_KEY) || "[]"
         );
 
         setWishlist(
@@ -130,7 +160,7 @@ const Search = () => {
   }, []);
 
   /* =========================================================
-     SEARCH
+     HANDLE SEARCH
   ========================================================= */
 
   const handleSearch = (e) => {
@@ -139,9 +169,7 @@ const Search = () => {
     const trimmedQuery = query.trim();
 
     if (trimmedQuery) {
-      setSearchParams({
-        q: trimmedQuery,
-      });
+      setSearchParams({ q: trimmedQuery });
     } else {
       setSearchParams({});
     }
@@ -157,24 +185,32 @@ const Search = () => {
     searchTerm === ""
       ? []
       : products.filter((product) => {
-          const name =
-            product.name?.toLowerCase() || "";
+          const name = String(
+            product.name || ""
+          ).toLowerCase();
 
-          const category =
-            product.category?.toLowerCase() || "";
+          const category = String(
+            product.category || ""
+          ).toLowerCase();
 
-          const description =
-            product.description?.toLowerCase() || "";
+          const description = String(
+            product.description || ""
+          ).toLowerCase();
+
+          const tags = Array.isArray(product.tags)
+            ? product.tags.join(" ").toLowerCase()
+            : String(product.tags || "").toLowerCase();
 
           return (
             name.includes(searchTerm) ||
             category.includes(searchTerm) ||
-            description.includes(searchTerm)
+            description.includes(searchTerm) ||
+            tags.includes(searchTerm)
           );
         });
 
   /* =========================================================
-     WISHLIST
+     CHECK WISHLIST
   ========================================================= */
 
   const isInWishlist = (productId) => {
@@ -185,12 +221,16 @@ const Search = () => {
     );
   };
 
+  /* =========================================================
+     TOGGLE WISHLIST
+  ========================================================= */
+
   const toggleWishlist = (product) => {
     const productId = product._id || product.id;
 
     try {
       const saved = JSON.parse(
-        localStorage.getItem("mamta_wishlist") || "[]"
+        localStorage.getItem(WISHLIST_KEY) || "[]"
       );
 
       const currentWishlist = Array.isArray(saved)
@@ -212,7 +252,7 @@ const Search = () => {
         : [...currentWishlist, product];
 
       localStorage.setItem(
-        "mamta_wishlist",
+        WISHLIST_KEY,
         JSON.stringify(updatedWishlist)
       );
 
@@ -230,7 +270,7 @@ const Search = () => {
   };
 
   /* =========================================================
-     IMAGE
+     GET PRODUCT IMAGE
   ========================================================= */
 
   const getImage = (product) => {
@@ -242,20 +282,29 @@ const Search = () => {
       Array.isArray(product.images) &&
       product.images.length > 0
     ) {
-      return product.images[0];
+      const firstImage = product.images[0];
+
+      // Also support image objects if your API returns them.
+      if (typeof firstImage === "string") {
+        return firstImage;
+      }
+
+      if (firstImage?.url) {
+        return firstImage.url;
+      }
     }
 
     return PLACEHOLDER_IMAGE;
   };
 
   /* =========================================================
-     PRICE
+     FORMAT PRICE
   ========================================================= */
 
   const formatPrice = (price) => {
     return `Rs. ${Number(
       price || 0
-    ).toLocaleString()}`;
+    ).toLocaleString("en-PK")}`;
   };
 
   /* =========================================================
@@ -265,9 +314,7 @@ const Search = () => {
   return (
     <main className="mamta-search-page">
 
-      {/* =====================================================
-          SEARCH HERO
-      ===================================================== */}
+      {/* SEARCH HERO */}
 
       <section className="search-hero">
 
@@ -286,8 +333,6 @@ const Search = () => {
             Search our collection of maternity
             and baby pillows.
           </p>
-
-          {/* SEARCH FORM */}
 
           <form
             className="search-form"
@@ -336,9 +381,7 @@ const Search = () => {
 
       </section>
 
-      {/* =====================================================
-          RESULTS
-      ===================================================== */}
+      {/* SEARCH RESULTS */}
 
       <section className="search-results">
 
@@ -362,7 +405,7 @@ const Search = () => {
 
               </div>
 
-              {!loading && (
+              {!loading && !loadError && (
                 <p>
                   {filteredProducts.length}{" "}
                   product
@@ -389,9 +432,33 @@ const Search = () => {
             </div>
           )}
 
+          {/* API ERROR */}
+
+          {!loading && loadError && (
+            <div className="search-message">
+
+              <div className="empty-search-icon">
+                <SearchIcon
+                  size={34}
+                  strokeWidth={1.3}
+                />
+              </div>
+
+              <h3>
+                Products could not be loaded
+              </h3>
+
+              <p>
+                Please try again in a moment.
+              </p>
+
+            </div>
+          )}
+
           {/* EMPTY SEARCH */}
 
           {!loading &&
+            !loadError &&
             !query.trim() && (
               <div className="search-message search-start">
 
@@ -416,6 +483,7 @@ const Search = () => {
           {/* NO RESULTS */}
 
           {!loading &&
+            !loadError &&
             query.trim() &&
             filteredProducts.length === 0 && (
               <div className="search-message">
@@ -452,6 +520,7 @@ const Search = () => {
           {/* PRODUCT GRID */}
 
           {!loading &&
+            !loadError &&
             filteredProducts.length > 0 && (
               <div className="search-product-grid">
 
@@ -469,16 +538,19 @@ const Search = () => {
                       key={productId}
                     >
 
-                      {/* IMAGE */}
+                      {/* PRODUCT IMAGE */}
 
                       <div className="search-product-image">
 
                         <img
                           src={getImage(product)}
-                          alt={product.name || "MAMTA product"}
+                          alt={
+                            product.name || "MAAMTA product"
+                          }
                           onError={(e) => {
                             e.currentTarget.onerror = null;
-                            e.currentTarget.src = PLACEHOLDER_IMAGE;
+                            e.currentTarget.src =
+                              PLACEHOLDER_IMAGE;
                           }}
                         />
 
@@ -517,7 +589,7 @@ const Search = () => {
 
                         </button>
 
-                        {/* VIEW */}
+                        {/* VIEW DETAILS */}
 
                         <Link
                           to={`/product/${productId}`}
@@ -534,7 +606,7 @@ const Search = () => {
 
                       </div>
 
-                      {/* INFO */}
+                      {/* PRODUCT INFO */}
 
                       <div className="search-product-info">
 
