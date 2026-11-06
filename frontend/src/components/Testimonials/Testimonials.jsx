@@ -113,7 +113,7 @@ const Testimonials = () => {
 
     const fetchReviews = async () => {
       try {
-        const response = await axios.get(`${API_URL}/reviews`);
+       const response = await axios.get(`${API_URL}/reviews/admin/all`);
 
         if (
           isMounted &&

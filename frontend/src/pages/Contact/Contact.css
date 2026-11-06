@@ -2416,3 +2416,161 @@ html {
   outline-offset: 3px;
   border-radius: 4px;
 }
+
+/* =========================================================
+   MOBILE — REDUCED ANIMATIONS
+   DESKTOP ANIMATIONS REMAIN UNCHANGED
+========================================================= */
+
+@media (max-width: 600px) {
+
+  /* Reduce page entrance animation */
+  .mamta-contact {
+    animation-duration: 0.35s;
+  }
+
+  /* Keep hero entrance but make it faster */
+  .contact-hero-content,
+  .contact-hero-image {
+    animation-duration: 0.45s;
+    animation-delay: 0s;
+  }
+
+  .contact-hero-content .contact-eyebrow,
+  .contact-hero-content h1,
+  .contact-hero-content p,
+  .contact-hero-button {
+    animation-duration: 0.4s;
+    animation-delay: 0s;
+  }
+
+  /* Stop continuous floating animations */
+  .contact-circle,
+  .contact-floating-card {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  /* Reduce image hover movement */
+  .contact-image-frame,
+  .contact-image-frame img {
+    transition-duration: 0.25s;
+  }
+
+  .contact-image-frame:hover {
+    transform: none;
+  }
+
+  .contact-image-frame:hover img {
+    transform: scale(1.02);
+  }
+
+  /* Reduce contact card movement */
+  .contact-info-card {
+    transition-duration: 0.2s;
+  }
+
+  .contact-info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(74, 48, 50, 0.07);
+  }
+
+  .contact-icon {
+    transition-duration: 0.2s;
+  }
+
+  .contact-info-card:hover .contact-icon {
+    transform: none;
+  }
+
+  .contact-info-card:hover > svg {
+    transform: none;
+  }
+
+  /* Disable floating card hover movement */
+  .contact-floating-card {
+    transition: none;
+  }
+
+  .contact-floating-card:hover {
+    transform: none;
+  }
+
+  /* Make form interactions smoother */
+  .mamta-contact-form,
+  .customer-review-form {
+    transition: box-shadow 0.2s ease;
+  }
+
+  .mamta-contact-form:hover,
+  .customer-review-form:hover {
+    transform: none;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    transition-duration: 0.2s;
+  }
+
+  .form-group input:focus,
+  .form-group textarea:focus {
+    transform: none;
+  }
+
+  /* Reduce button movement */
+  .contact-hero-button,
+  .contact-submit,
+  .contact-final-button,
+  .review-submit {
+    transition-duration: 0.2s;
+  }
+
+  .contact-hero-button:hover,
+  .contact-submit:hover,
+  .contact-final-button:hover,
+  .review-submit:not(:disabled):hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Simpler star interaction */
+  .review-star {
+    transition-duration: 0.15s;
+  }
+
+  .review-star:hover {
+    transform: none;
+  }
+
+  /* Remove animated gradient movement */
+  .customer-review-form::before {
+    animation: none;
+  }
+
+  /* FAQ — reduce movement */
+  .mamta-faq-item,
+  .mamta-faq-question,
+  .mamta-faq-policy-link,
+  .mamta-faq-contact-button {
+    transition-duration: 0.2s;
+  }
+
+  .mamta-faq-answer {
+    animation-duration: 0.15s;
+  }
+
+  .mamta-faq-contact-button:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Keep final section simple */
+  .contact-final-content {
+    animation-duration: 0.45s;
+  }
+
+  /* Remove unnecessary animated decorative text */
+  .customer-review-section::before {
+    display: none;
+  }
+}

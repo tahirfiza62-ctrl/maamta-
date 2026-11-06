@@ -1,6 +1,5 @@
 
-import { useState } from "react";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Mail,
   Phone,
@@ -16,9 +15,12 @@ import toast from "react-hot-toast";
 
 import "./Contact.css";
 
-const API_URL =
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";const faqs = [
+  "https://maamta.onrender.com/api"
+).replace(/\/+$/, "");
+
+const faqs = [
   {
     question: "How can I place an order?",
     answer:
@@ -54,26 +56,26 @@ const API_URL =
     answer:
       "Return eligibility depends on the product's condition and the terms in our Return Policy. Please review the policy or contact our team for guidance.",
   },
-{
-  question: "How can I contact MAAMTA customer support?",
-  answer: (
-    <>
-      You can email us at{" "}
-      <a href="mailto:maamtacircle@gmail.com">
-        maamtacircle@gmail.com
-      </a>{" "}
-      or call{" "}
-     <a
-  href="https://wa.me/923431516875"
-  target="_blank"
-  rel="noopener noreferrer"
->
-+923431516875
-</a>{" "}
-      for assistance with your products, orders, delivery, or returns.
-    </>
-  ),
-},
+  {
+    question: "How can I contact MAAMTA customer support?",
+    answer: (
+      <>
+        You can email us at{" "}
+        <a href="mailto:maamtacircle@gmail.com">
+          maamtacircle@gmail.com
+        </a>{" "}
+        or call{" "}
+        <a
+          href="https://wa.me/923431516875"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          +923431516875
+        </a>{" "}
+        for assistance with your products, orders, delivery, or returns.
+      </>
+    ),
+  },
 ];
 
 const Contact = () => {
@@ -116,18 +118,24 @@ const Contact = () => {
       currentIndex === index ? -1 : index
     );
   };
-useEffect(() => {
-  if (window.location.hash === "#faq") {
-    const timer = setTimeout(() => {
-      document.getElementById("faq")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 300);
 
-    return () => clearTimeout(timer);
-  }
-}, []);
+  /* =========================================================
+     FAQ SCROLL
+  ========================================================= */
+
+  useEffect(() => {
+    if (window.location.hash === "#faq") {
+      const timer = setTimeout(() => {
+        document.getElementById("faq")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   /* =========================================================
      CONTACT FORM CHANGE
   ========================================================= */
@@ -204,7 +212,7 @@ useEffect(() => {
       setLoading(true);
 
       const response = await axios.post(
-        `${API_URL}/admin/contact`,
+        `${API_URL}/contact`,
         {
           name,
           email,
@@ -306,7 +314,7 @@ useEffect(() => {
       setReviewLoading(true);
 
       const response = await axios.post(
-        `${API_URL}/admin/reviews`,
+        `${API_URL}/reviews`,
         {
           name,
           city,
@@ -756,7 +764,6 @@ useEffect(() => {
 
       {/* =====================================================
           FREQUENTLY ASKED QUESTIONS
-          ADDED BELOW CUSTOMER REVIEW
       ===================================================== */}
 
       <section className="mamta-faq-section" id="faq">

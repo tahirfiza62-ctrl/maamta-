@@ -1222,3 +1222,116 @@ background: radial-gradient(circle at 15% 25%, rgba(217, 143, 154, 0.14), transp
     transition: none;
   }
 }
+
+/* =========================================================
+   MAMTA ABOUT — MOBILE ANIMATION REDUCTION
+   Desktop animations remain unchanged
+========================================================= */
+
+@media (max-width: 650px) {
+
+  /* Hero image */
+  .about-main-image img,
+  .about-main-image:hover img {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Story image */
+  .about-story-image img,
+  .about-story-image:hover img {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Motherhood image */
+  .motherhood-image-main img,
+  .motherhood-image-main:hover img {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Value cards */
+  .about-value-card,
+  .about-value-card:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Hero button */
+  .about-hero-button,
+  .about-hero-button:hover,
+  .about-hero-button:active {
+    animation: none !important;
+    transform: none !important;
+    transition: background-color 0.15s ease !important;
+    box-shadow: 0 12px 28px rgba(74, 48, 50, 0.13);
+  }
+
+  /* Motherhood button */
+  .about-motherhood-button,
+  .about-motherhood-button:hover,
+  .about-motherhood-button:active {
+    animation: none !important;
+    transform: none !important;
+    transition: background-color 0.15s ease !important;
+  }
+
+  /* Final CTA button */
+  .about-final-button,
+  .about-final-button:hover,
+  .about-final-button:active {
+    animation: none !important;
+    transform: none !important;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease !important;
+  }
+
+  /* Floating cards and decorative elements */
+  .about-floating-card,
+  .motherhood-small-card,
+  .about-hero-circle,
+  .about-glow {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* =========================================================
+   VERY SMALL PHONES
+========================================================= */
+
+@media (max-width: 380px) {
+
+  .about-main-image img,
+  .about-story-image img,
+  .motherhood-image-main img,
+  .about-value-card,
+  .about-hero-button,
+  .about-motherhood-button,
+  .about-final-button {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY — REDUCE ALL MOTION WHEN REQUESTED
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .about-page *,
+  .about-page *::before,
+  .about-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

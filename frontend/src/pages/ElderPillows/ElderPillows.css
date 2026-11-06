@@ -1834,3 +1834,111 @@ font-size: 80px;
     animation: none;
   }
 }
+/* =========================================================
+   REDUCED ANIMATIONS — MOBILE
+========================================================= */
+
+@media (max-width: 650px) {
+
+  /* Remove hero entrance animation */
+  .elder-hero-content {
+    animation: none;
+  }
+
+  /* Disable hover movements */
+  .elder-hero-content:hover .elder-eyebrow,
+  .elder-hero-content:hover h1,
+  .elder-hero-content:hover h1 span,
+  .elder-hero-content:hover p {
+    transform: none;
+    letter-spacing: inherit;
+  }
+
+  .elder-hero:hover::before,
+  .elder-hero:hover::after {
+    transform: none;
+  }
+
+  /* Reduce button animation */
+  .elder-primary-button,
+  .elder-empty-button {
+    transition:
+      background 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .elder-primary-button:hover,
+  .elder-empty-button:hover {
+    transform: none;
+    gap: 12px;
+    box-shadow: none;
+  }
+
+  /* Reduce product card animation */
+  .elder-product-card {
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+
+  .elder-product-card:hover {
+    transform: none;
+  }
+
+  .elder-product-image img {
+    transition: none;
+  }
+
+  .elder-product-card:hover .elder-product-image img {
+    transform: none;
+  }
+
+  .elder-product-image::after {
+    transition: none;
+  }
+
+  .elder-product-card:hover .elder-product-image::after {
+    opacity: 1;
+  }
+
+  /* Simplify wishlist and view button animations */
+  .elder-wishlist,
+  .elder-view-button {
+    transition:
+      background 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .elder-wishlist:hover,
+  .elder-view-button:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Remove unnecessary text movements */
+  .elder-intro:hover .elder-section-label,
+  .elder-intro:hover h2,
+  .elder-intro:hover > p,
+  .elder-products-header > div:hover h2,
+  .elder-product-name:hover {
+    transform: none;
+    letter-spacing: inherit;
+  }
+
+  /* Keep loading spinner working */
+  .elder-spinner {
+    animation: elderSpin 1.5s linear infinite;
+  }
+}
+
+/* Extra reduction on very small screens */
+@media (max-width: 400px) {
+
+  .elder-product-card,
+  .elder-product-image img,
+  .elder-wishlist,
+  .elder-view-button,
+  .elder-primary-button {
+    transition: none;
+  }
+}

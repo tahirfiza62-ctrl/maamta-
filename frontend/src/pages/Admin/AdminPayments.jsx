@@ -196,10 +196,23 @@ const AdminPayments = () => {
      INITIAL LOAD
   ======================================================= */
 
-  useEffect(() => {
-    fetchPayments();
-  }, [fetchPayments]);
+useEffect(() => {
+  let isMounted = true;
 
+  const loadPayments = async () => {
+    await Promise.resolve();
+
+    if (isMounted) {
+      fetchPayments();
+    }
+  };
+
+  loadPayments();
+
+  return () => {
+    isMounted = false;
+  };
+}, [fetchPayments]);
   /* =======================================================
      PAYMENT METHODS (defaults + any others found in data)
   ======================================================= */

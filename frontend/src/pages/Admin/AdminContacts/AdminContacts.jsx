@@ -89,18 +89,18 @@ const AdminContacts = () => {
     navigate("/admin", { replace: true });
   }, [navigate]);
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem(TOKEN_KEY);
+const getAuthHeaders = useCallback(() => {
+  const token = localStorage.getItem(TOKEN_KEY);
 
-    if (!token) {
-      handleAuthFailure();
-      return null;
-    }
+  if (!token) {
+    handleAuthFailure();
+    return null;
+  }
 
-    return {
-      Authorization: `Bearer ${token}`,
-    };
+  return {
+    Authorization: `Bearer ${token}`,
   };
+}, [handleAuthFailure]);
 
   /* =======================================================
      FETCH CONTACT MESSAGES
@@ -172,22 +172,26 @@ const AdminContacts = () => {
         }
       }
     },
-    [handleAuthFailure]
+   [getAuthHeaders, handleAuthFailure]
   );
 
   /* =======================================================
      INITIAL LOAD
   ======================================================= */
+useEffect(() => {
+  const controller = new AbortController();
 
-  useEffect(() => {
-    const controller = new AbortController();
+  Promise.resolve().then(() => {
+    if (!controller.signal.aborted) {
+      fetchContacts(false, controller.signal);
+    }
+  });
 
-    fetchContacts(false, controller.signal);
+  return () => {
+    controller.abort();
+  };
+}, [fetchContacts]);
 
-    return () => {
-      controller.abort();
-    };
-  }, [fetchContacts]);
 
   /* =======================================================
      UPDATE MESSAGE STATUS

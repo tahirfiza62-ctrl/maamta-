@@ -2128,3 +2128,84 @@ display: grid;
     animation: none;
   }
 }
+/* =========================================================
+   MOBILE — REDUCED ANIMATIONS
+   Desktop animations remain unchanged
+========================================================= */
+
+@media (max-width: 768px) {
+
+  /* Stop rotating badge */
+  .maternity-round-badge {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  /* Remove floating card movement */
+  .maternity-floating-card {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Remove product button entrance animation */
+  .maternity-product-overlay {
+    animation: none !important;
+    transition: none !important;
+    transform: translateY(0) !important;
+  }
+
+  /* Remove product card hover movement */
+  .maternity-product-card,
+  .maternity-product-card:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Remove product image zoom */
+  .maternity-product-image img,
+  .maternity-product-card:hover .maternity-product-image img {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Remove wishlist hover animation */
+  .maternity-wishlist,
+  .maternity-wishlist:hover {
+    transform: none !important;
+    transition: color 0.15s ease, background 0.15s ease !important;
+  }
+
+  /* Reduce button animations */
+  .maternity-primary-btn,
+  .maternity-primary-btn:hover,
+  .maternity-details-button,
+  .maternity-details-button:hover,
+  .maternity-add-cart-button,
+  .maternity-add-cart-button:hover,
+  .maternity-product-overlay button,
+  .maternity-product-overlay button:hover,
+  .maternity-closing-inner a,
+  .maternity-closing-inner a:hover {
+    transform: none !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+  }
+
+  /* Remove unnecessary visual movement */
+  .maternity-main-image img {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .maternity-round-badge,
+  .maternity-floating-card,
+  .maternity-product-overlay,
+  .maternity-product-card,
+  .maternity-product-image img {
+    animation: none !important;
+    transition: none !important;
+  }
+}

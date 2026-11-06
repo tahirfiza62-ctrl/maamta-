@@ -319,10 +319,15 @@ export default function Reviews() {
      INITIAL LOAD
   ======================================================= */
 
-  useEffect(() => {
+ useEffect(() => {
+  const timer = setTimeout(() => {
     fetchReviews(false);
-  }, [fetchReviews]);
+  }, 0);
 
+  return () => {
+    clearTimeout(timer);
+  };
+}, [fetchReviews]);
   /* =======================================================
      STATISTICS
   ======================================================= */
@@ -443,12 +448,12 @@ export default function Reviews() {
      CLOSE EDIT
   ======================================================= */
 
-  const closeEdit = () => {
-    if (saving) return;
+ const closeEdit = useCallback(() => {
+  if (saving) return;
 
-    setEditingReview(null);
-    setFormData({ ...emptyForm });
-  };
+  setEditingReview(null);
+  setFormData({ ...emptyForm });
+}, [saving]);
 
   /* =======================================================
      ESCAPE KEY

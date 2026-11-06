@@ -2171,3 +2171,202 @@ html {
     transform: none;
   }
 }
+
+/* =========================================================
+   MAMTA — PRODUCT DETAILS
+   MOBILE ANIMATION REDUCTION
+   Desktop animations remain unchanged
+========================================================= */
+
+@media (max-width: 600px) {
+
+  /* Main product image — remove zoom */
+  .product-details-image img,
+  .product-gallery .product-details-image img {
+    transition: none !important;
+  }
+
+  .product-details-image:hover img,
+  .product-gallery .product-details-image:hover img {
+    transform: none !important;
+  }
+
+  /* Product thumbnails */
+  .product-image-thumbnail,
+  .product-image-thumbnail img {
+    transition: none !important;
+  }
+
+  .product-image-thumbnail:hover,
+  .product-image-thumbnail:hover img {
+    transform: none !important;
+  }
+
+  /* Color selection */
+  .color-option {
+    transition: border-color 0.15s ease,
+                background-color 0.15s ease !important;
+  }
+
+  .color-option:hover {
+    transform: none !important;
+  }
+
+  /* Quantity buttons */
+  .product-quantity-control button {
+    transition: background-color 0.15s ease,
+                color 0.15s ease !important;
+  }
+
+  /* WhatsApp button */
+  .product-whatsapp-button,
+  .mamta-whatsapp-product-btn {
+    transition: background-color 0.15s ease !important;
+  }
+
+  .product-whatsapp-button:hover {
+    transform: none !important;
+    box-shadow: 0 8px 24px rgba(37, 211, 102, 0.2);
+  }
+
+  .product-whatsapp-button:hover .product-whatsapp-icon,
+  .product-whatsapp-button:hover > svg:last-child {
+    transform: none !important;
+  }
+
+  .product-whatsapp-button:active {
+    transform: none !important;
+  }
+
+  /* Add to cart */
+  .details-add-cart {
+    transition: background-color 0.15s ease !important;
+  }
+
+  .details-add-cart:hover {
+    transform: none !important;
+  }
+
+  /* Wishlist */
+  .details-wishlist {
+    transition: background-color 0.15s ease,
+                color 0.15s ease,
+                border-color 0.15s ease !important;
+  }
+
+  /* View cart */
+  .view-cart-button {
+    transition: background-color 0.15s ease,
+                color 0.15s ease,
+                border-color 0.15s ease !important;
+  }
+
+  /* Back to shop */
+  .product-back-shop a {
+    transition: color 0.15s ease !important;
+  }
+
+  .product-back-shop a:hover {
+    transform: none !important;
+  }
+
+  /* Review section — remove card movement */
+  .mamta-review-card {
+    transition: border-color 0.15s ease !important;
+  }
+
+  .mamta-review-card:hover {
+    transform: none !important;
+    box-shadow: 0 8px 24px rgba(75, 34, 45, 0.035) !important;
+  }
+
+  /* Review form fields */
+  .mamta-review-field input,
+  .mamta-review-field textarea {
+    transition: border-color 0.15s ease,
+                box-shadow 0.15s ease !important;
+  }
+
+  /* Review stars */
+  .mamta-rating-star {
+    transition: background-color 0.15s ease,
+                color 0.15s ease !important;
+  }
+
+  .mamta-rating-star:hover {
+    transform: none !important;
+  }
+
+  /* Submit review */
+  .mamta-submit-review-button {
+    transition: background-color 0.15s ease !important;
+  }
+
+  .mamta-submit-review-button:hover:not(:disabled) {
+    transform: none !important;
+    box-shadow: 0 8px 18px rgba(184, 94, 115, 0.2);
+  }
+
+  /* Read reviews link */
+  .read-reviews-link {
+    transition: background-color 0.15s ease,
+                color 0.15s ease,
+                border-color 0.15s ease !important;
+  }
+
+  .read-reviews-link:hover,
+  .read-reviews-link:active {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Rating progress bars */
+  .mamta-rating-fill {
+    transition: none !important;
+  }
+
+  /* Keep loading spinner working, but slower */
+  .mamta-review-loading-spinner {
+    animation-duration: 1.4s !important;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE — REMOVE MORE MOTION
+========================================================= */
+
+@media (max-width: 400px) {
+
+  .product-details-image img,
+  .product-image-thumbnail,
+  .product-image-thumbnail img,
+  .product-details-image:hover img,
+  .product-gallery .product-details-image:hover img,
+  .product-image-thumbnail:hover,
+  .product-image-thumbnail:hover img,
+  .mamta-review-card,
+  .mamta-rating-star {
+    animation: none !important;
+    transition: none !important;
+  }
+
+}
+
+/* =========================================================
+   REDUCED MOTION ACCESSIBILITY
+========================================================= */
+
+@media (max-width: 600px) and (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .mamta-review-loading-spinner {
+    animation: none !important;
+  }
+}

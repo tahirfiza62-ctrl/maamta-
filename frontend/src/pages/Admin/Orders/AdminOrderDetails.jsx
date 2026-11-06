@@ -283,72 +283,78 @@ const AdminOrderDetails = () => {
      GET /api/admin/orders/:id
   ========================================================= */
 
-  useEffect(() => {
-    if (!id) {
-      setLoading(false);
-      return undefined;
-    }
+ /* =========================================================
+   FETCH ORDER
+   GET /api/admin/orders/:id
+========================================================= */
 
-    let cancelled = false;
+useEffect(() => {
+  if (!id) return;
 
-    const fetchOrder = async () => {
-      try {
-        setLoading(true);
-        setLoadError("");
+  let cancelled = false;
 
-        const token = localStorage.getItem(TOKEN_KEY);
+  const fetchOrder = async () => {
+    try {
+      setLoading(true);
+      setLoadError("");
 
-        if (!token) {
-          navigate("/admin");
-          return;
-        }
+      const token = localStorage.getItem(TOKEN_KEY);
 
-        const response = await axios.get(`${ORDERS_URL}/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        const orderData = response.data?.order || response.data;
-
-        setOrder(orderData || null);
-
-        setStatus(orderData?.orderStatus || orderData?.status || "Pending");
-      } catch (err) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error("ADMIN ORDER DETAILS ERROR:", err);
-
-        const code = err.response?.status;
-
-        if (code === 401 || code === 403) {
-          handleAuthFailure();
-          return;
-        }
-
-        setOrder(null);
-
-        /* 404 means "not found"; anything else is a real error */
-        if (code !== 404) {
-          setLoadError(getErrorMessage(err, "Unable to load this order."));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (!token) {
+        navigate("/admin");
+        return;
       }
-    };
 
-    fetchOrder();
+      const response = await axios.get(`${ORDERS_URL}/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [id, navigate, handleAuthFailure]);
+      if (cancelled) return;
+
+      const orderData = response.data?.order || response.data;
+
+      setOrder(orderData || null);
+      setStatus(
+        orderData?.orderStatus ||
+        orderData?.status ||
+        "Pending"
+      );
+
+    } catch (err) {
+      if (cancelled) return;
+
+      console.error("ADMIN ORDER DETAILS ERROR:", err);
+
+      const code = err.response?.status;
+
+      if (code === 401 || code === 403) {
+        handleAuthFailure();
+        return;
+      }
+
+      setOrder(null);
+
+      if (code !== 404) {
+        setLoadError(
+          getErrorMessage(err, "Unable to load this order.")
+        );
+      }
+
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+  };
+
+  fetchOrder();
+
+  return () => {
+    cancelled = true;
+  };
+}, [id, navigate, handleAuthFailure]);
 
   /* =========================================================
      UPDATE STATUS

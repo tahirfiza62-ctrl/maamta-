@@ -126,10 +126,27 @@ const AdminProducts = () => {
      INITIAL LOAD
   ======================================================= */
 
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+/* =======================================================
+   INITIAL LOAD
+======================================================= */
 
+useEffect(() => {
+  let isMounted = true;
+
+  const loadProducts = async () => {
+    await Promise.resolve();
+
+    if (isMounted) {
+      fetchProducts();
+    }
+  };
+
+  loadProducts();
+
+  return () => {
+    isMounted = false;
+  };
+}, [fetchProducts]);
   /* =======================================================
      CATEGORIES
   ======================================================= */

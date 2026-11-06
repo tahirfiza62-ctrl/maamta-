@@ -2956,3 +2956,126 @@ box-sizing: border-box;
     transform: none;
   }
 }
+
+/* =========================================================
+   MAMTA SHOP — REDUCED MOBILE ANIMATIONS
+   Desktop animations remain unchanged
+========================================================= */
+
+@media (max-width: 600px) {
+
+  /* Stop rotating hero text */
+  .hero-round-text {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+
+  /* Remove product card movement */
+  .shop-product-card,
+  .shop-product-card:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Remove product image zoom */
+  .product-image-link img,
+  .product-image-link .product-main-image,
+  .product-image-link .product-hover-image,
+  .shop-product-image,
+  .shop-product-image-main,
+  .shop-product-image-hover {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Keep the main product image visible */
+  .product-main-image,
+  .shop-product-image-main {
+    opacity: 1 !important;
+  }
+
+  /* Hide alternate hover images on mobile */
+  .product-hover-image,
+  .shop-product-image-hover {
+    opacity: 0 !important;
+  }
+
+  /* Remove product overlay animation */
+  .product-image-overlay,
+  .product-image-overlay:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Remove wishlist movement */
+  .product-wishlist,
+  .product-wishlist:hover,
+  .product-wishlist svg,
+  .product-wishlist:hover svg {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Reduce button animations */
+  .details-button,
+  .details-button:hover,
+  .add-cart-button,
+  .add-cart-button:hover,
+  .add-cart-button svg,
+  .add-cart-button:hover svg,
+  .no-products button,
+  .no-products button:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: background 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease !important;
+  }
+
+  /* Remove category tab movement */
+  .category-tab,
+  .category-tab:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: background 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease !important;
+  }
+
+  /* Keep search and sorting functional without animation */
+  .shop-search,
+  .shop-sort select {
+    transition: none !important;
+  }
+
+  /* Remove flying cart and cart pop animation */
+  .mamta-flying-cart-item,
+  .cart-pop-animation {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Remove unnecessary decorative movement */
+  .hero-floating-card,
+  .hero-image-main img,
+  .hero-decor-circle {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Extra-small phones */
+@media (max-width: 380px) {
+  .hero-round-text,
+  .shop-product-card,
+  .product-image-link img,
+  .product-image-overlay,
+  .mamta-flying-cart-item,
+  .cart-pop-animation {
+    animation: none !important;
+    transition: none !important;
+  }
+}

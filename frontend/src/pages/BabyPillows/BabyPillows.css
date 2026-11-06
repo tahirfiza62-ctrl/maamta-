@@ -2422,3 +2422,201 @@ font-size: 70px;
     max-width: 88vw !important;
   }
 }
+
+/* =========================================================
+   BABY PILLOWS — REDUCED MOBILE ANIMATIONS
+   Desktop animations remain unchanged
+========================================================= */
+
+@media (max-width: 768px) {
+
+  /* HERO — remove floating animations */
+  .maternity-hero-circle,
+  .maternity-glow-one,
+  .maternity-glow-two,
+  .maternity-floating-card,
+  .ma-round-badge {
+    animation: none !important;
+  }
+
+  /* Hero image — remove hover movement and zoom */
+  .maternity-main-image {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .maternity-main-image:hover {
+    transform: none !important;
+    box-shadow: 0 20px 40px rgba(74, 48, 50, 0.12);
+  }
+
+  .maternity-main-image img {
+    transition: none !important;
+  }
+
+  .maternity-main-image:hover img {
+    transform: none !important;
+  }
+
+  /* HERO BUTTON */
+  .baby-primary-button,
+  .baby-primary-button svg {
+    transition: background 0.2s ease !important;
+  }
+
+  .baby-primary-button:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  .baby-primary-button:hover svg {
+    transform: none !important;
+  }
+
+  /* FEATURES */
+  .baby-feature,
+  .baby-feature-icon {
+    transition: background 0.2s ease !important;
+  }
+
+  .baby-feature:hover {
+    transform: none !important;
+  }
+
+  .baby-feature:hover .baby-feature-icon {
+    transform: none !important;
+  }
+
+  /* PRODUCT CARDS */
+  .baby-product-card {
+    transition: box-shadow 0.2s ease !important;
+  }
+
+  .baby-product-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  /* PRODUCT IMAGES — remove zoom */
+  .baby-product-image img {
+    transition: none !important;
+  }
+
+  .baby-product-card:hover .baby-product-image img {
+    transform: none !important;
+  }
+
+  .baby-product-image::after {
+    transition: none !important;
+  }
+
+  /* WISHLIST — remove pop animation */
+  .baby-wishlist,
+  .baby-wishlist.active {
+    animation: none !important;
+    transition: background 0.2s ease, color 0.2s ease !important;
+  }
+
+  .baby-wishlist:hover {
+    transform: none !important;
+  }
+
+  /* DETAILS BUTTON — keep visible without movement */
+  .baby-details-button,
+  .baby-details-button svg {
+    transition: background 0.2s ease, color 0.2s ease !important;
+    transform: none !important;
+  }
+
+  .baby-product-card:hover .baby-details-button {
+    transform: none !important;
+    opacity: 1;
+  }
+
+  .baby-details-button:hover svg {
+    transform: none !important;
+  }
+
+  /* PRODUCT NAME */
+  .baby-product-info h3 {
+    transition: color 0.2s ease !important;
+  }
+
+  /* CART — remove continuous pulse */
+  .baby-cart,
+  .baby-cart.adding {
+    animation: none !important;
+    transition: background 0.2s ease !important;
+  }
+
+  .baby-cart:hover,
+  .baby-cart:active {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  /* FINAL CTA — remove rotating circle */
+  .baby-final::before {
+    animation: none !important;
+  }
+
+  .baby-final-button,
+  .baby-final-button svg {
+    transition: background 0.2s ease, color 0.2s ease !important;
+  }
+
+  .baby-final-button:hover {
+    transform: none !important;
+  }
+
+  .baby-final-button:hover svg {
+    transform: none !important;
+  }
+
+  /* SCROLL REVEAL — smaller and faster movement */
+  .scroll-reveal {
+    transition:
+      opacity 0.4s ease,
+      transform 0.4s ease !important;
+    transition-delay: 0s !important;
+    will-change: auto;
+  }
+
+  .reveal-up {
+    transform: translate3d(0, 15px, 0);
+  }
+
+  .reveal-down {
+    transform: translate3d(0, -15px, 0);
+  }
+
+  .reveal-left {
+    transform: translate3d(-12px, 0, 0);
+  }
+
+  .reveal-right {
+    transform: translate3d(12px, 0, 0);
+  }
+
+  .scroll-reveal.is-visible {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* EXTRA SMALL PHONES */
+@media (max-width: 480px) {
+
+  .scroll-reveal {
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s ease !important;
+  }
+
+  .baby-product-card,
+  .baby-product-image img,
+  .baby-feature,
+  .baby-wishlist,
+  .baby-cart {
+    transition-duration: 0.15s !important;
+  }
+}

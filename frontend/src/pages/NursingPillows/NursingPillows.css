@@ -1972,3 +1972,170 @@ font-size: 80px;
     animation: none;
   }
 }
+/* =========================================================
+   MOBILE — REDUCE AND REMOVE ANIMATIONS
+   Desktop animations remain unchanged
+========================================================= */
+
+@media (max-width: 650px) {
+
+  /* Remove hero entrance and decorative animations */
+  .nursing-hero-content {
+    animation: none !important;
+  }
+
+  .nursing-hero::before,
+  .nursing-hero::after {
+    transition: none !important;
+  }
+
+  .nursing-hero:hover::before,
+  .nursing-hero:hover::after {
+    transform: none !important;
+  }
+
+  .nursing-circle,
+  .nursing-soft-shape {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Remove hover movement from hero text */
+  .nursing-hero-content:hover .nursing-eyebrow,
+  .nursing-hero-content:hover .nursing-hero h1,
+  .nursing-hero-content:hover .nursing-hero h1 span,
+  .nursing-hero-content:hover .nursing-hero p {
+    transform: none !important;
+    letter-spacing: inherit;
+  }
+
+  .nursing-eyebrow,
+  .nursing-eyebrow::before,
+  .nursing-eyebrow::after,
+  .nursing-hero h1,
+  .nursing-hero h1 span,
+  .nursing-hero p {
+    transition: none !important;
+  }
+
+  /* Buttons */
+  .nursing-primary-button,
+  .nursing-empty-button {
+    transition: background-color 0.2s ease !important;
+  }
+
+  .nursing-primary-button:hover,
+  .nursing-empty-button:hover {
+    transform: none !important;
+    box-shadow: none !important;
+    gap: 12px;
+  }
+
+  /* Intro section */
+  .nursing-section-label,
+  .nursing-intro h2,
+  .nursing-intro > p {
+    transition: none !important;
+  }
+
+  .nursing-intro:hover h2,
+  .nursing-intro:hover > p {
+    transform: none !important;
+    letter-spacing: inherit;
+  }
+
+  /* Products heading and count */
+  .nursing-products-header h2,
+  .nursing-product-count {
+    transition: none !important;
+  }
+
+  .nursing-products-header > div:hover h2,
+  .nursing-product-count:hover {
+    transform: none !important;
+  }
+
+  /* Product cards */
+  .nursing-product-card {
+    transition: box-shadow 0.2s ease !important;
+  }
+
+  .nursing-product-card:hover {
+    transform: none !important;
+    box-shadow: 0 8px 30px rgba(74, 48, 50, 0.045) !important;
+  }
+
+  .nursing-product-image img {
+    transition: none !important;
+  }
+
+  .nursing-product-card:hover .nursing-product-image img {
+    transform: none !important;
+  }
+
+  .nursing-product-image::after,
+  .nursing-product-content {
+    transition: none !important;
+  }
+
+  .nursing-product-card:hover .nursing-product-image::after {
+    opacity: 1;
+  }
+
+  .nursing-product-card:hover .nursing-product-content {
+    background: #ffffff;
+  }
+
+  /* Wishlist and view buttons */
+  .nursing-wishlist,
+  .nursing-view-button {
+    transition: background-color 0.2s ease, color 0.2s ease !important;
+  }
+
+  .nursing-wishlist:hover,
+  .nursing-view-button:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Product name and price */
+  .nursing-product-name,
+  .nursing-price strong {
+    transition: none !important;
+  }
+
+  .nursing-product-name:hover {
+    transform: none !important;
+  }
+
+  /* Loading and empty state */
+  .nursing-empty {
+    animation: none !important;
+  }
+
+  .nursing-spinner {
+    animation: nursingSpin 1.5s linear infinite;
+  }
+
+  .nursing-empty-button {
+    transition: background-color 0.2s ease !important;
+  }
+
+  /* Bottom banner */
+  .nursing-bottom-banner h2 {
+    transition: none !important;
+  }
+
+  .nursing-bottom-banner:hover h2 {
+    transform: none !important;
+  }
+}
+
+/* Extra reduction for very small screens */
+@media (max-width: 400px) {
+
+  .nursing-spinner {
+    animation-duration: 2s;
+  }
+
+}
