@@ -83,12 +83,12 @@ const orderSchema = new mongoose.Schema(
        USER
     ------------------------------------------------------- */
 
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
+   userId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  required: false,
+  default: null,
+},
 
     /* -------------------------------------------------------
        ORDER NUMBER

@@ -377,45 +377,50 @@ const MaternityPillows = () => {
   ======================================================== */
 
   const addToGuestCart = (cartData) => {
-    let guestCart = [];
+  let guestCart = [];
 
-    try {
-      const savedCart = JSON.parse(
-        localStorage.getItem(GUEST_CART_KEY) || "[]"
-      );
-
-      guestCart = Array.isArray(savedCart)
-        ? savedCart
-        : Array.isArray(savedCart?.items)
-          ? savedCart.items
-          : [];
-    } catch (error) {
-      console.error("GUEST CART READ ERROR:", error);
-    }
-
-    const existingItemIndex = guestCart.findIndex(
-      (item) =>
-        String(item.productId || item._id || item.id) ===
-          String(cartData.productId) &&
-        String(item.color || "") === String(cartData.color || "")
+  try {
+    const savedCart = JSON.parse(
+      localStorage.getItem(GUEST_CART_KEY) || "[]"
     );
 
-    if (existingItemIndex !== -1) {
-      guestCart[existingItemIndex] = {
-        ...guestCart[existingItemIndex],
-        quantity:
-          Number(guestCart[existingItemIndex].quantity || 0) +
-          Number(cartData.quantity || 1),
-      };
-    } else {
-      guestCart.push(cartData);
-    }
+    guestCart = Array.isArray(savedCart)
+      ? savedCart
+      : Array.isArray(savedCart?.items)
+        ? savedCart.items
+        : [];
+  } catch (error) {
+    console.error("GUEST CART READ ERROR:", error);
+  }
 
-    localStorage.setItem(
-      GUEST_CART_KEY,
-      JSON.stringify(guestCart)
-    );
-  };
+  const existingItemIndex = guestCart.findIndex(
+    (item) =>
+      String(item.productId || item._id || item.id) ===
+        String(cartData.productId) &&
+      String(item.color || "") === String(cartData.color || "")
+  );
+
+  if (existingItemIndex !== -1) {
+    guestCart[existingItemIndex] = {
+      ...guestCart[existingItemIndex],
+      ...cartData,
+      quantity:
+        Number(guestCart[existingItemIndex].quantity || 0) +
+        Number(cartData.quantity || 1),
+    };
+  } else {
+    guestCart.push(cartData);
+  }
+
+  localStorage.setItem(
+    GUEST_CART_KEY,
+    JSON.stringify({
+      items: guestCart,
+    })
+  );
+
+  window.dispatchEvent(new Event("cartChanged"));
+};
 
   /* =======================================================
      ADD TO CART

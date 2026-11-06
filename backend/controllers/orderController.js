@@ -1,10 +1,14 @@
+const mongoose = require("mongoose");
+
 const Cart = require("../models/Cart");
+const Product = require("../models/Product");
 const Order = require("../models/Order");
+
 const sendPushNotification = require("../utils/sendPushNotification");
 const sendOrderEmail = require("../utils/sendOrderEmail");
 
 /* =========================================================
-   CREATE ORDER
+   CREATE ORDER — GUEST + LOGGED-IN
 ========================================================= */
 
 const createOrder = async (req, res) => {
@@ -16,151 +20,296 @@ const createOrder = async (req, res) => {
       address,
       city,
       paymentMethod,
+      items: guestItems,
     } = req.body;
 
+    const isLoggedIn = Boolean(req.user?._id);
+
     /* =====================================================
-       VALIDATION
+       CUSTOMER VALIDATION
     ===================================================== */
 
     if (!name || !name.trim()) {
       return res.status(400).json({
+        success: false,
         message: "Name is required.",
       });
     }
 
     if (!email || !email.trim()) {
       return res.status(400).json({
+        success: false,
         message: "Email is required.",
       });
     }
 
     if (!phone || !phone.trim()) {
       return res.status(400).json({
+        success: false,
         message: "Phone number is required.",
       });
     }
 
     if (!address || !address.trim()) {
       return res.status(400).json({
+        success: false,
         message: "Address is required.",
       });
     }
 
     if (!city || !city.trim()) {
       return res.status(400).json({
+        success: false,
         message: "City is required.",
       });
     }
 
-    /* =====================================================
-       EMAIL VALIDATION
-    ===================================================== */
-
-    const emailRegex =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(email.trim())) {
       return res.status(400).json({
+        success: false,
         message: "Please enter a valid email address.",
       });
     }
-
-    /* =====================================================
-       PHONE VALIDATION
-    ===================================================== */
 
     const phoneRegex = /^03\d{9}$/;
 
     if (!phoneRegex.test(phone.trim())) {
       return res.status(400).json({
-        message:
-          "Please enter a valid Pakistani phone number.",
+        success: false,
+        message: "Please enter a valid Pakistani phone number.",
       });
     }
 
     /* =====================================================
-       FIND USER CART
+       PAYMENT METHOD
+
+       Guest checkout is COD only.
+       Online payments remain in the existing authenticated
+       payment flow.
     ===================================================== */
 
-    const cart = await Cart.findOne({
-      userId: req.user._id,
+    const requestedPaymentMethod =
+      String(paymentMethod || "Cash on Delivery")
+        .trim()
+        .toLowerCase();
+
+    const isCOD = [
+      "cod",
+      "cash on delivery",
+    ].includes(requestedPaymentMethod);
+
+    if (!isCOD) {
+      return res.status(403).json({
+        success: false,
+        message: isLoggedIn
+          ? "Please use the online payment process for online orders."
+          : "Please login to use online payment.",
+      });
+    }
+
+    /* =====================================================
+       GET CART ITEMS
+
+       Logged-in customer:
+       Read items from MongoDB cart.
+
+       Guest:
+       Read items sent from frontend localStorage.
+    ===================================================== */
+
+    let sourceItems = [];
+
+    if (isLoggedIn) {
+      const cart = await Cart.findOne({
+        userId: req.user._id,
+      });
+
+      if (!cart || !cart.items || cart.items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Your cart is empty.",
+        });
+      }
+
+      sourceItems = cart.items;
+    } else {
+      if (!Array.isArray(guestItems) || guestItems.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Your cart is empty.",
+        });
+      }
+
+      sourceItems = guestItems;
+    }
+
+    /* =====================================================
+       VALIDATE PRODUCT IDS AND QUANTITIES
+    ===================================================== */
+
+    const requestedItems = [];
+
+    for (const item of sourceItems) {
+      const productId = String(
+        item.productId ||
+        item._id ||
+        item.id ||
+        ""
+      );
+
+      const quantity = Number(item.quantity);
+
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({
+          success: false,
+          message: "One of the cart products has an invalid ID.",
+        });
+      }
+
+      if (
+        !Number.isInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "A cart item has an invalid quantity.",
+        });
+      }
+
+      requestedItems.push({
+        productId,
+        quantity,
+        color:
+          typeof item.color === "string"
+            ? item.color.trim()
+            : "",
+      });
+    }
+
+    /* =====================================================
+       FETCH REAL PRODUCTS FROM DATABASE
+
+       Never trust price, name, or image from frontend.
+    ===================================================== */
+
+    const productIds = [
+      ...new Set(requestedItems.map((item) => item.productId)),
+    ];
+
+    const products = await Product.find({
+      _id: {
+        $in: productIds,
+      },
+      active: {
+        $ne: false,
+      },
     });
 
-    if (!cart) {
-      return res.status(404).json({
-        message: "Cart not found.",
-      });
-    }
-
-    if (!cart.items || cart.items.length === 0) {
-      return res.status(400).json({
-        message: "Your cart is empty.",
-      });
-    }
-
-    /* =====================================================
-       CALCULATE SUBTOTAL
-    ===================================================== */
-
-    const subtotal = cart.items.reduce(
-      (sum, item) => {
-        const price = Number(item.price) || 0;
-        const quantity = Number(item.quantity) || 0;
-
-        return sum + price * quantity;
-      },
-      0
+    const productMap = new Map(
+      products.map((product) => [
+        String(product._id),
+        product,
+      ])
     );
 
     /* =====================================================
-       SHIPPING
+       BUILD VERIFIED ORDER ITEMS
     ===================================================== */
+
+    const orderItems = [];
+
+    for (const item of requestedItems) {
+      const product = productMap.get(item.productId);
+
+      if (!product) {
+        return res.status(400).json({
+          success: false,
+          message: "A product in your cart is unavailable. Please refresh your cart.",
+        });
+      }
+
+      const selectedColor = item.color || "";
+
+      let matchedColor = null;
+
+      if (selectedColor && product.colors?.length) {
+        matchedColor = product.colors.find((color) => {
+          const requestedColor = selectedColor.toLowerCase();
+
+          return (
+            String(color.name || "").toLowerCase() === requestedColor ||
+            String(color.value || "").toLowerCase() === requestedColor ||
+            String(color.code || "").toLowerCase() === requestedColor
+          );
+        });
+
+        if (!matchedColor) {
+          return res.status(400).json({
+            success: false,
+            message: `The selected color for ${product.name} is no longer available.`,
+          });
+        }
+      }
+
+      const price = Number(product.price);
+
+      if (!Number.isFinite(price) || price < 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid price for ${product.name}.`,
+        });
+      }
+
+      const colorImage = matchedColor?.image || "";
+
+      const image =
+        colorImage ||
+        product.image ||
+        product.images?.[0] ||
+        "";
+
+      const colorName = matchedColor?.name || selectedColor;
+
+      const colorCode = matchedColor?.code || "";
+
+      orderItems.push({
+        productId: String(product._id),
+        name: product.name,
+        image,
+        price,
+        quantity: item.quantity,
+        color: colorName,
+        colorCode,
+        colorImage,
+        total: price * item.quantity,
+      });
+    }
+
+    /* =====================================================
+       CALCULATE TOTALS
+    ===================================================== */
+
+    const subtotal = orderItems.reduce(
+      (sum, item) => sum + item.total,
+      0
+    );
 
     const shipping = subtotal >= 5000 ? 0 : 250;
 
     const total = subtotal + shipping;
 
     /* =====================================================
-       ORDER NUMBER
+       CREATE ORDER
     ===================================================== */
 
     const orderNumber = `MAMTA-${Date.now()}`;
 
-    /* =====================================================
-       ORDER ITEMS
-    ===================================================== */
-
-    const orderItems = cart.items.map((item) => {
-      const price = Number(item.price) || 0;
-      const quantity = Number(item.quantity) || 1;
-
-      return {
-        productId: String(item.productId),
-
-        name: item.name || "Product",
-
-        image: item.image || "",
-
-        price,
-
-        quantity,
-
-        color: item.color || "",
-
-        colorCode: item.colorCode || "",
-
-        colorImage: item.colorImage || "",
-
-        total: price * quantity,
-      };
-    });
-
-    /* =====================================================
-       CREATE ORDER
-    ===================================================== */
-
-    const order = await Order.create({
-      userId: req.user._id,
+    const orderData = {
+      // Guests have no account, so userId remains null.
+      userId: isLoggedIn ? req.user._id : null,
 
       orderNumber,
 
@@ -168,45 +317,35 @@ const createOrder = async (req, res) => {
 
       customer: {
         name: name.trim(),
-
         email: email.trim().toLowerCase(),
-
         phone: phone.trim(),
-
         address: address.trim(),
-
         city: city.trim(),
       },
 
       subtotal,
-
       shipping,
-
       total,
 
-      paymentMethod:
-        paymentMethod || "Cash on Delivery",
-
+      paymentMethod: "Cash on Delivery",
       paymentStatus: "Pending",
-
       orderStatus: "Pending",
-    });
+    };
+
+    const order = await Order.create(orderData);
 
     console.log(
-      `✅ ORDER CREATED: ${order.orderNumber}`
+      `✅ ORDER CREATED: ${order.orderNumber} | ${
+        isLoggedIn ? "LOGGED-IN CUSTOMER" : "GUEST CUSTOMER"
+      }`
     );
 
     /* =====================================================
-       SEND EMAIL IN BACKGROUND
-       
-       IMPORTANT:
-       Do NOT use await here.
-       
-       This prevents Gmail/Nodemailer from delaying
-       the customer's order confirmation.
+       SEND ORDER EMAIL IN BACKGROUND
     ===================================================== */
 
-    sendOrderEmail(order)
+    Promise.resolve()
+      .then(() => sendOrderEmail(order))
       .then(() => {
         console.log(
           `📧 ORDER EMAIL SENT: ${order.orderNumber}`
@@ -214,31 +353,28 @@ const createOrder = async (req, res) => {
       })
       .catch((error) => {
         console.error(
-          `❌ ORDER EMAIL FAILED: ${order.orderNumber}`
+          `❌ ORDER EMAIL FAILED: ${order.orderNumber}`,
+          error
         );
-
-        console.error(error);
       });
 
     /* =====================================================
-       PUSH NOTIFICATION
-       
-       Also runs in background so it cannot delay
-       the customer's order response.
+       PUSH NOTIFICATION — LOGGED-IN CUSTOMERS ONLY
     ===================================================== */
 
-    if (req.user._id) {
-      Promise.resolve(
-        sendPushNotification({
-          userId: req.user._id,
-          title: "Order Placed Successfully",
-          body: `Your MAMTA order ${order.orderNumber} has been placed successfully.`,
-          data: {
-            orderId: order._id.toString(),
-            orderNumber: order.orderNumber,
-          },
-        })
-      )
+    if (isLoggedIn) {
+      Promise.resolve()
+        .then(() =>
+          sendPushNotification({
+            userId: req.user._id,
+            title: "Order Placed Successfully",
+            body: `Your MAMTA order ${order.orderNumber} has been placed successfully.`,
+            data: {
+              orderId: order._id.toString(),
+              orderNumber: order.orderNumber,
+            },
+          })
+        )
         .then(() => {
           console.log(
             `🔔 PUSH NOTIFICATION SENT: ${order.orderNumber}`
@@ -253,76 +389,59 @@ const createOrder = async (req, res) => {
     }
 
     /* =====================================================
-       CLEAR CART
-       
-       Clear immediately after order creation.
-       We do NOT wait for email or notification.
+       CLEAR DATABASE CART — LOGGED-IN ONLY
+
+       Guest cart is cleared by Checkout.jsx in localStorage
+       after the server confirms successful order creation.
     ===================================================== */
 
-    await Cart.findOneAndUpdate(
-      {
-        userId: req.user._id,
-      },
-      {
-        $set: {
-          items: [],
+    if (isLoggedIn) {
+      await Cart.findOneAndUpdate(
+        {
+          userId: req.user._id,
         },
-      }
-    );
+        {
+          $set: {
+            items: [],
+          },
+        }
+      );
 
-    console.log(
-      `🛒 CART CLEARED: ${order.orderNumber}`
-    );
+      console.log(
+        `🛒 CART CLEARED: ${order.orderNumber}`
+      );
+    }
 
     /* =====================================================
-       RETURN SUCCESS IMMEDIATELY
+       SUCCESS RESPONSE
     ===================================================== */
 
     return res.status(201).json({
       success: true,
-
       message: "Order placed successfully.",
-
       order: {
         _id: order._id,
-
         orderNumber: order.orderNumber,
-
         customer: order.customer,
-
         items: order.items,
-
         subtotal: order.subtotal,
-
         shipping: order.shipping,
-
         total: order.total,
-
         paymentMethod: order.paymentMethod,
-
         paymentStatus: order.paymentStatus,
-
         orderStatus: order.orderStatus,
-
         createdAt: order.createdAt,
       },
     });
   } catch (error) {
-    console.error(
-      "❌ CREATE ORDER ERROR:",
-      error
-    );
+    console.error("❌ CREATE ORDER ERROR:", error);
 
     return res.status(500).json({
       success: false,
-
-      message:
-        error.message ||
-        "Failed to create order.",
+      message: error.message || "Failed to create order.",
     });
   }
 };
-
 
 /* =========================================================
    GET MY ORDERS
@@ -341,10 +460,7 @@ const getMyOrders = async (req, res) => {
       orders,
     });
   } catch (error) {
-    console.error(
-      "❌ GET MY ORDERS ERROR:",
-      error
-    );
+    console.error("❌ GET MY ORDERS ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -352,7 +468,6 @@ const getMyOrders = async (req, res) => {
     });
   }
 };
-
 
 /* =========================================================
    GET SINGLE ORDER
@@ -377,10 +492,7 @@ const getOrderById = async (req, res) => {
       order,
     });
   } catch (error) {
-    console.error(
-      "❌ GET ORDER ERROR:",
-      error
-    );
+    console.error("❌ GET ORDER ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -388,7 +500,6 @@ const getOrderById = async (req, res) => {
     });
   }
 };
-
 
 /* =========================================================
    CANCEL ORDER
@@ -414,8 +525,7 @@ const cancelOrder = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          "This order cannot be cancelled.",
+        message: "This order cannot be cancelled.",
       });
     }
 
@@ -425,16 +535,11 @@ const cancelOrder = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-
       message: "Order cancelled successfully.",
-
       order,
     });
   } catch (error) {
-    console.error(
-      "❌ CANCEL ORDER ERROR:",
-      error
-    );
+    console.error("❌ CANCEL ORDER ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -443,9 +548,8 @@ const cancelOrder = async (req, res) => {
   }
 };
 
-
 /* =========================================================
-   UPDATE ORDER STATUS
+   UPDATE ORDER STATUS — ADMIN
 ========================================================= */
 
 const updateOrderStatus = async (req, res) => {
@@ -475,9 +579,7 @@ const updateOrderStatus = async (req, res) => {
       });
     }
 
-    const order = await Order.findById(
-      req.params.id
-    );
+    const order = await Order.findById(req.params.id);
 
     if (!order) {
       return res.status(404).json({
@@ -492,26 +594,18 @@ const updateOrderStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-
-      message:
-        "Order status updated successfully.",
-
+      message: "Order status updated successfully.",
       order,
     });
   } catch (error) {
-    console.error(
-      "❌ UPDATE ORDER STATUS ERROR:",
-      error
-    );
+    console.error("❌ UPDATE ORDER STATUS ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to update order status.",
+      message: "Failed to update order status.",
     });
   }
 };
-
 
 /* =========================================================
    EXPORTS

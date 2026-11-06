@@ -8,56 +8,18 @@ const {
 } = require("../controllers/orderController");
 
 const authMiddleware = require("../middleware/authMiddleware");
+const optionalAuthMiddleware = require(
+  "../middleware/optionalAuthMiddleware"
+);
 
 const router = express.Router();
 
+// Guest COD and logged-in orders.
+router.post("/", optionalAuthMiddleware, createOrder);
 
-/* =========================================================
-   CREATE NEW ORDER
-   POST /api/orders
-========================================================= */
-
-router.post(
-  "/",
-  authMiddleware,
-  createOrder
-);
-
-
-/* =========================================================
-   GET LOGGED-IN CUSTOMER ORDERS
-   GET /api/orders
-========================================================= */
-
-router.get(
-  "/",
-  authMiddleware,
-  getMyOrders
-);
-
-
-/* =========================================================
-   GET SINGLE ORDER
-   GET /api/orders/:id
-========================================================= */
-
-router.get(
-  "/:id",
-  authMiddleware,
-  getOrderById
-);
-
-
-/* =========================================================
-   CANCEL ORDER
-   PUT /api/orders/:id/cancel
-========================================================= */
-
-router.put(
-  "/:id/cancel",
-  authMiddleware,
-  cancelOrder
-);
-
+// These routes remain login-only.
+router.get("/", authMiddleware, getMyOrders);
+router.get("/:id", authMiddleware, getOrderById);
+router.put("/:id/cancel", authMiddleware, cancelOrder);
 
 module.exports = router;

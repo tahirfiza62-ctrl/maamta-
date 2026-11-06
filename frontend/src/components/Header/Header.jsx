@@ -171,29 +171,21 @@ const Header = () => {
   ===================================================== */
 
   useEffect(() => {
-    const loadCartCount = async () => {
-      const token = localStorage.getItem("mamta_user_token");
+  const loadCartCount = async () => {
+    const token = localStorage.getItem("mamta_user_token");
 
-      if (!token) {
-        setCartCount(0);
-        previousCartCount.current = 0;
-        return;
-      }
-
+    // GUEST CART
+    if (!token) {
       try {
-        const response = await fetch(`${API_URL}/cart`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const savedCart = JSON.parse(
+          localStorage.getItem("mamta_guest_cart") || "[]"
+        );
 
-        if (!response.ok) {
-          setCartCount(0);
-          return;
-        }
-
-        const data = await response.json();
-        const items = data.cart?.items || [];
+        const items = Array.isArray(savedCart)
+          ? savedCart
+          : Array.isArray(savedCart?.items)
+            ? savedCart.items
+            : [];
 
         const count = items.reduce(
           (total, item) =>
@@ -201,38 +193,63 @@ const Header = () => {
           0
         );
 
-        if (count > previousCartCount.current) {
-          setCartBounce(false);
-
-          requestAnimationFrame(() => {
-            setCartBounce(true);
-          });
-
-          playCartSound();
-
-          setTimeout(() => {
-            setCartBounce(false);
-          }, 700);
-        }
-
-        previousCartCount.current = count;
         setCartCount(count);
+        previousCartCount.current = count;
       } catch (error) {
-        console.error("CART COUNT ERROR:", error);
+        console.error("GUEST CART COUNT ERROR:", error);
         setCartCount(0);
+        previousCartCount.current = 0;
       }
-    };
 
-    loadCartCount();
+      return;
+    }
 
-    window.addEventListener("cartChanged", loadCartCount);
-    window.addEventListener("authChanged", loadCartCount);
+    // LOGGED-IN CART
+    try {
+      const response = await fetch(`${API_URL}/cart`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    return () => {
-      window.removeEventListener("cartChanged", loadCartCount);
-      window.removeEventListener("authChanged", loadCartCount);
-    };
-  }, []);
+      if (!response.ok) {
+        if (
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          setCartCount(0);
+        }
+        return;
+      }
+
+      const data = await response.json();
+      const items = data.cart?.items || [];
+
+      const count = items.reduce(
+        (total, item) =>
+          total + Number(item.quantity || 0),
+        0
+      );
+
+      setCartCount(count);
+      previousCartCount.current = count;
+    } catch (error) {
+      console.error("CART COUNT ERROR:", error);
+    }
+  };
+
+  loadCartCount();
+
+  window.addEventListener("cartChanged", loadCartCount);
+  window.addEventListener("authChanged", loadCartCount);
+  window.addEventListener("storage", loadCartCount);
+
+  return () => {
+    window.removeEventListener("cartChanged", loadCartCount);
+    window.removeEventListener("authChanged", loadCartCount);
+    window.removeEventListener("storage", loadCartCount);
+  };
+}, []);
 
   /* =====================================================
      CLOSE MOBILE MENU ON DESKTOP
