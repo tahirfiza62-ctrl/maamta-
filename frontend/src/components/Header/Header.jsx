@@ -12,6 +12,40 @@ import {
 
 import "./Header.css";
 
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://maamta.onrender.com/api";
+
+/* =====================================================
+   USER + WISHLIST HELPERS
+===================================================== */
+
+const getCurrentUser = () => {
+  try {
+    const storedUser =
+      localStorage.getItem("mamta_user") ||
+      localStorage.getItem("mamta_user_data") ||
+      localStorage.getItem("currentUser");
+
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error("USER READ ERROR:", error);
+    return null;
+  }
+};
+
+const getWishlistKey = (user) => {
+  if (!user) return null;
+
+  const userId = user._id || user.id || user.email;
+
+  if (!userId) return null;
+
+  return `mamta_wishlist_${encodeURIComponent(
+    String(userId).toLowerCase()
+  )}`;
+};
+
 const Header = () => {
   const [wishlist, setWishlist] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -21,25 +55,20 @@ const Header = () => {
 
   const previousCartCount = useRef(0);
 
-  // =====================================================
-  // CART SOUND
-  // =====================================================
+  /* =====================================================
+     CART SOUND
+  ===================================================== */
 
   const playCartSound = () => {
     try {
       const AudioContext =
-        window.AudioContext ||
-        window.webkitAudioContext;
+        window.AudioContext || window.webkitAudioContext;
 
       if (!AudioContext) return;
 
       const audioContext = new AudioContext();
-
-      const oscillator =
-        audioContext.createOscillator();
-
-      const gainNode =
-        audioContext.createGain();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
 
       oscillator.type = "sine";
 
@@ -72,75 +101,73 @@ const Header = () => {
       gainNode.connect(audioContext.destination);
 
       oscillator.start();
-
-      oscillator.stop(
-        audioContext.currentTime + 0.16
-      );
+      oscillator.stop(audioContext.currentTime + 0.16);
 
       setTimeout(() => {
         audioContext.close();
       }, 250);
-
     } catch (error) {
       console.error("CART SOUND ERROR:", error);
     }
   };
 
-
-  // =====================================================
-  // LOAD WISHLIST
-  // =====================================================
+  /* =====================================================
+     LOAD USER + ACCOUNT WISHLIST
+  ===================================================== */
 
   useEffect(() => {
-    const loadWishlist = () => {
+    const refreshWishlist = () => {
+      const token = localStorage.getItem("mamta_user_token");
+      const user = getCurrentUser();
+
+      const loggedIn = Boolean(token && user);
+      const wishlistKey = loggedIn
+        ? getWishlistKey(user)
+        : null;
+
+      setIsLoggedIn(loggedIn);
+
+      if (!wishlistKey) {
+        setWishlist([]);
+        return;
+      }
+
       try {
-        const savedWishlist =
-          JSON.parse(
-            localStorage.getItem("mamta_wishlist")
-          ) || [];
+        const savedWishlist = JSON.parse(
+          localStorage.getItem(wishlistKey) || "[]"
+        );
 
         setWishlist(
-          Array.isArray(savedWishlist)
-            ? savedWishlist
-            : []
+          Array.isArray(savedWishlist) ? savedWishlist : []
         );
-
       } catch (error) {
-        console.error(
-          "WISHLIST LOAD ERROR:",
-          error
-        );
-
+        console.error("WISHLIST LOAD ERROR:", error);
         setWishlist([]);
       }
     };
 
-    loadWishlist();
+    refreshWishlist();
 
-    window.addEventListener(
-      "wishlistUpdated",
-      loadWishlist
-    );
+    window.addEventListener("wishlistUpdated", refreshWishlist);
+    window.addEventListener("authChanged", refreshWishlist);
+    window.addEventListener("authUpdated", refreshWishlist);
+    window.addEventListener("storage", refreshWishlist);
 
     return () => {
-      window.removeEventListener(
-        "wishlistUpdated",
-        loadWishlist
-      );
+      window.removeEventListener("wishlistUpdated", refreshWishlist);
+      window.removeEventListener("authChanged", refreshWishlist);
+      window.removeEventListener("authUpdated", refreshWishlist);
+      window.removeEventListener("storage", refreshWishlist);
     };
   }, []);
 
-
-  // =====================================================
-  // LOAD CART COUNT
-  // =====================================================
+  /* =====================================================
+     LOAD CART COUNT
+  ===================================================== */
 
   useEffect(() => {
     const loadCartCount = async () => {
-      const token =
-        localStorage.getItem(
-          "mamta_user_token"
-        );
+      const token = localStorage.getItem("mamta_user_token");
 
       if (!token) {
         setCartCount(0);
@@ -149,39 +176,27 @@ const Header = () => {
       }
 
       try {
-        const response = await fetch(
-          "https://mamta-app-8.onrender.com/api/cart",
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetch(`${API_URL}/cart`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
         if (!response.ok) {
           setCartCount(0);
           return;
         }
 
-        const data =
-          await response.json();
+        const data = await response.json();
+        const items = data.cart?.items || [];
 
-        const items =
-          data.cart?.items || [];
+        const count = items.reduce(
+          (total, item) =>
+            total + Number(item.quantity || 0),
+          0
+        );
 
-        const count =
-          items.reduce(
-            (total, item) =>
-              total +
-              Number(item.quantity || 0),
-            0
-          );
-
-        if (
-          count >
-          previousCartCount.current
-        ) {
+        if (count > previousCartCount.current) {
           setCartBounce(false);
 
           requestAnimationFrame(() => {
@@ -197,83 +212,26 @@ const Header = () => {
 
         previousCartCount.current = count;
         setCartCount(count);
-
       } catch (error) {
-        console.error(
-          "CART COUNT ERROR:",
-          error
-        );
-
+        console.error("CART COUNT ERROR:", error);
         setCartCount(0);
       }
     };
 
     loadCartCount();
 
-    window.addEventListener(
-      "cartChanged",
-      loadCartCount
-    );
-
-    window.addEventListener(
-      "authChanged",
-      loadCartCount
-    );
+    window.addEventListener("cartChanged", loadCartCount);
+    window.addEventListener("authChanged", loadCartCount);
 
     return () => {
-      window.removeEventListener(
-        "cartChanged",
-        loadCartCount
-      );
-
-      window.removeEventListener(
-        "authChanged",
-        loadCartCount
-      );
+      window.removeEventListener("cartChanged", loadCartCount);
+      window.removeEventListener("authChanged", loadCartCount);
     };
   }, []);
 
-
-  // =====================================================
-  // LOGIN STATUS
-  // =====================================================
-
-  useEffect(() => {
-    const checkLoginStatus = () => {
-      const token =
-        localStorage.getItem(
-          "mamta_user_token"
-        );
-
-      const user =
-        localStorage.getItem(
-          "mamta_user"
-        );
-
-      setIsLoggedIn(
-        !!token && !!user
-      );
-    };
-
-    checkLoginStatus();
-
-    window.addEventListener(
-      "authChanged",
-      checkLoginStatus
-    );
-
-    return () => {
-      window.removeEventListener(
-        "authChanged",
-        checkLoginStatus
-      );
-    };
-  }, []);
-
-
-  // =====================================================
-  // CLOSE MOBILE MENU ON DESKTOP
-  // =====================================================
+  /* =====================================================
+     CLOSE MOBILE MENU ON DESKTOP
+  ===================================================== */
 
   useEffect(() => {
     const handleResize = () => {
@@ -282,405 +240,195 @@ const Header = () => {
       }
     };
 
-    window.addEventListener(
-      "resize",
-      handleResize
-    );
+    window.addEventListener("resize", handleResize);
 
     return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 
-
-  // =====================================================
-  // CLOSE MOBILE MENU
-  // =====================================================
+  /* =====================================================
+     CLOSE MOBILE MENU
+  ===================================================== */
 
   const closeMobileMenu = () => {
     setMobileOpen(false);
   };
 
-
-  // =====================================================
-  // RENDER
-  // =====================================================
+  /* =====================================================
+     RENDER
+  ===================================================== */
 
   return (
     <>
-      {/* =================================================
-          TOP ANNOUNCEMENT BAR
-          NOT STICKY
-      ================================================= */}
+      {/* TOP ANNOUNCEMENT BAR */}
 
       <div className="top-line">
-
         <div className="top-line-track">
-
-          {/* FIRST SET */}
-
           <div className="top-line-content">
-
-            <span>
-              Shipping All Over Pakistan
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-               Free Delivery on Every Order
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-                 15% Off on Every Order
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-              Shipping All Over Pakistan
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-               Free Delivery on Every Order
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-                 20% Off on Every Order
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-           
-
+            <span>Shipping All Over Pakistan</span>
+            <span className="top-line-divider">✦</span>
+            <span>Comfort • Care • Love</span>
+            <span className="top-line-divider">✦</span>
+            <span>15% Off on Every Order</span>
+            <span className="top-line-divider">✦</span>
+            <span>Shipping All Over Pakistan</span>
+            <span className="top-line-divider">✦</span>
+            <span>Comfort • Care • Love</span>
+            <span className="top-line-divider">✦</span>
+            <span>20% Off on Every Order</span>
+            <span className="top-line-divider">✦</span>
           </div>
 
-
-          {/* SECOND SET */}
-
           <div className="top-line-content">
-
-            <span>
-              Made with Love for Mothers & Little Ones
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-              20% Off on Every Order
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-              Shipping All Over Pakistan
-            </span>
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-            <span>
-              Free Delivery on Every Order
-            </span>
-
-           
-            
-
-            <span className="top-line-divider">
-              ✦
-            </span>
-
-           
-
-
+            <span>Made with Love for Mothers & Little Ones</span>
+            <span className="top-line-divider">✦</span>
+            <span>20% Off on Every Order</span>
+            <span className="top-line-divider">✦</span>
+            <span>Shipping All Over Pakistan</span>
+            <span className="top-line-divider">✦</span>
+            <span>Comfort • Care • Love</span>
+            <span className="top-line-divider">✦</span>
           </div>
-
         </div>
-
       </div>
 
-
-      {/* =================================================
-          STICKY NAVBAR
-          THIS IS NOW OUTSIDE THE TOP-LINE CONTAINER
-      ================================================= */}
+      {/* MAIN HEADER */}
 
       <div className="main-header">
-
-        {/* =================================================
-            LOGO
-        ================================================= */}
+        {/* LOGO */}
 
         <Link
           to="/"
           className="logo-group"
           onClick={closeMobileMenu}
         >
-
           <img
             src="https://res.cloudinary.com/iysbraru/image/upload/v1791674408/Mamta_Circle_Mother_and_Baby_Emblem_1.png"
             alt="MAMTA Logo"
             className="logo-one"
           />
-
-        
-
         </Link>
 
-
-        {/* =================================================
-            DESKTOP NAVIGATION
-        ================================================= */}
+        {/* DESKTOP NAVIGATION */}
 
         <nav className="main-nav">
-
-          <Link to="/">
-            Home
-          </Link>
-
-          <Link to="/shop">
-            Shop
-          </Link>
-
-          <Link to="/maternity-pillows">
-            Maternity
-          </Link>
-
-          <Link to="/baby-pillows">
-            Baby & Kids
-          </Link>
-
-          <Link to="/about">
-            About Us
-          </Link>
-
-          <Link to="/contact">
-            Contact
-          </Link>
-
+          <Link to="/">Home</Link>
+          <Link to="/shop">Shop</Link>
+          <Link to="/maternity-pillows">Maternity</Link>
+          <Link to="/baby-pillows">Baby & Kids</Link>
+          <Link to="/about">About Us</Link>
+          <Link to="/contact">Contact</Link>
         </nav>
 
-
-        {/* =================================================
-            HEADER ACTIONS
-        ================================================= */}
+        {/* HEADER ACTIONS */}
 
         <div className="header-actions">
-
-          {/* SEARCH */}
-
           <Link
             to="/search"
             className="header-icon"
             aria-label="Search"
             title="Search"
           >
-            <Search
-              size={20}
-              strokeWidth={1.7}
-            />
+            <Search size={20} strokeWidth={1.7} />
           </Link>
-
 
           {/* WISHLIST */}
 
-         
-<Link
-  to="/wishlist"
-  className="header-wishlist"
-  data-wishlist-target
-  title="Wishlist"
-  aria-label="Wishlist"
->
- 
-            <Heart
-              size={20}
-              strokeWidth={1.7}
-            />
+          <Link
+            to="/wishlist"
+            className="header-wishlist"
+            data-wishlist-target
+            title="Wishlist"
+            aria-label="Wishlist"
+          >
+            <Heart size={20} strokeWidth={1.7} />
 
-            {wishlist.length > 0 && (
+            {isLoggedIn && wishlist.length > 0 && (
               <span className="wishlist-count">
                 {wishlist.length}
               </span>
             )}
-
           </Link>
-
 
           {/* LOGIN / ACCOUNT */}
 
           {!isLoggedIn ? (
-
             <Link
               to="/login"
               className="header-login-btn"
             >
               LOGIN
             </Link>
-
           ) : (
-
             <Link
               to="/profile"
               className="header-icon account-icon"
               aria-label="Account"
               title="My Account"
             >
-              <User
-                size={20}
-                strokeWidth={1.7}
-              />
+              <User size={20} strokeWidth={1.7} />
             </Link>
-
           )}
 
-
           {/* CART */}
-<Link
-  to="/cart"
-  className={`cart-action ${
-    cartBounce ? "cart-bounce" : ""
-  }`}
-  data-cart-target="true"
-  aria-label="Cart"
-  title="Cart"
->
 
-            <span className="action-icon">
-              🛍
-            </span>
+          <Link
+            to="/cart"
+            className={`cart-action ${
+              cartBounce ? "cart-bounce" : ""
+            }`}
+            data-cart-target="true"
+            aria-label="Cart"
+            title="Cart"
+          >
+            <span className="action-icon">🛍</span>
 
             {cartCount > 0 && (
               <span className="cart-count">
                 {cartCount}
               </span>
             )}
-
           </Link>
-
 
           {/* MOBILE MENU */}
 
           <button
             type="button"
             className="mobile-menu"
-            aria-label={
-              mobileOpen
-                ? "Close menu"
-                : "Open menu"
-            }
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
-            onClick={() =>
-              setMobileOpen(
-                (prev) => !prev
-              )
-            }
+            onClick={() => setMobileOpen((prev) => !prev)}
           >
-
             {mobileOpen ? (
-              <X
-                size={23}
-                strokeWidth={1.7}
-              />
+              <X size={23} strokeWidth={1.7} />
             ) : (
-              <Menu
-                size={23}
-                strokeWidth={1.7}
-              />
+              <Menu size={23} strokeWidth={1.7} />
             )}
-
           </button>
-
         </div>
 
-
-        {/* =================================================
-            MOBILE NAVIGATION
-        ================================================= */}
+        {/* MOBILE NAVIGATION */}
 
         <div
           className={`mobile-nav ${
-            mobileOpen
-              ? "mobile-nav-open"
-              : ""
+            mobileOpen ? "mobile-nav-open" : ""
           }`}
         >
-
-          <Link
-            to="/"
-            onClick={closeMobileMenu}
-          >
-            Home
-          </Link>
-
-          <Link
-            to="/shop"
-            onClick={closeMobileMenu}
-          >
-            Shop
-          </Link>
-
-          <Link
-            to="/maternity-pillows"
-            onClick={closeMobileMenu}
-          >
+          <Link to="/" onClick={closeMobileMenu}>Home</Link>
+          <Link to="/shop" onClick={closeMobileMenu}>Shop</Link>
+          <Link to="/maternity-pillows" onClick={closeMobileMenu}>
             Maternity
           </Link>
-
-          <Link
-            to="/baby-pillows"
-            onClick={closeMobileMenu}
-          >
+          <Link to="/baby-pillows" onClick={closeMobileMenu}>
             Baby & Kids
           </Link>
-
-          <Link
-            to="/about"
-            onClick={closeMobileMenu}
-          >
-            About Us
-          </Link>
-
-          <Link
-            to="/contact"
-            onClick={closeMobileMenu}
-          >
-            Contact
-          </Link>
-
+          <Link to="/about" onClick={closeMobileMenu}>About Us</Link>
+          <Link to="/contact" onClick={closeMobileMenu}>Contact</Link>
         </div>
-
       </div>
 
-
-      {/* =================================================
-          MOBILE OVERLAY
-      ================================================= */}
+      {/* MOBILE OVERLAY */}
 
       {mobileOpen && (
         <div
@@ -693,4 +441,3 @@ const Header = () => {
 };
 
 export default Header;
-
