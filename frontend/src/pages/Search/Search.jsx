@@ -1,6 +1,10 @@
 
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import axios from "axios";
 
 import {
@@ -14,7 +18,7 @@ import {
 import "./Search.css";
 
 /* =========================================================
-   API
+   API + STORAGE
 ========================================================= */
 
 const API_URL = (
@@ -25,51 +29,80 @@ const API_URL = (
 const PLACEHOLDER_IMAGE =
   "https://placehold.co/700x700/F4D9DC/4A3032?text=MAMTA";
 
-const WISHLIST_KEY = "mamta_wishlist";
+/* =========================================================
+   USER + WISHLIST HELPERS
+========================================================= */
+
+const getCurrentUser = () => {
+  try {
+    const storedUser =
+      localStorage.getItem("mamta_user") ||
+      localStorage.getItem("mamta_user_data") ||
+      localStorage.getItem("currentUser");
+
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error("USER READ ERROR:", error);
+    return null;
+  }
+};
+
+const getWishlistKey = () => {
+  const token = localStorage.getItem("mamta_user_token");
+  const user = getCurrentUser();
+
+  if (!token || !user) return null;
+
+  const userId = user._id || user.id || user.email;
+
+  if (!userId) return null;
+
+  return `mamta_wishlist_${encodeURIComponent(
+    String(userId).trim().toLowerCase()
+  )}`;
+};
 
 /* =========================================================
    COMPONENT
 ========================================================= */
 
 const Search = () => {
+  const navigate = useNavigate();
+
   const [searchParams, setSearchParams] = useSearchParams();
 
-const query = searchParams.get("q") || "";
-const [inputQuery, setInputQuery] = useState(query);
+  const query = searchParams.get("q") || "";
+
+  const [inputQuery, setInputQuery] = useState(query);
 
   const [products, setProducts] = useState([]);
   const [wishlist, setWishlist] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
   /* =========================================================
-     SYNC SEARCH QUERY WITH URL
-  ========================================================= */
-
-
-
-  /* =========================================================
-     LOAD PRODUCTS FROM PUBLIC API
-  ========================================================= */
+     LOAD PRODUCTS
+========================================================= */
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchProducts = async () => {
       try {
-        setLoading(true);
-        setLoadError(false);
-
-        // Use the same public endpoint as the Shop page.
         const response = await axios.get(
-          `${API_URL}/products`
+          `${API_URL}/products`,
+          {
+            timeout: 15000,
+          }
         );
 
         if (cancelled) return;
 
         const data = response.data;
 
-        // Support different backend response formats.
+        console.log("SEARCH API RESPONSE:", data);
+
         let productList = [];
 
         if (Array.isArray(data)) {
@@ -80,9 +113,10 @@ const [inputQuery, setInputQuery] = useState(query);
           productList = data.data;
         } else if (Array.isArray(data?.data?.products)) {
           productList = data.data.products;
+        } else if (Array.isArray(data?.data?.data)) {
+          productList = data.data.data;
         }
 
-        console.log("SEARCH API RESPONSE:", data);
         console.log("SEARCH PRODUCTS:", productList);
 
         const validProducts = productList.filter(
@@ -93,6 +127,7 @@ const [inputQuery, setInputQuery] = useState(query);
         );
 
         setProducts(validProducts);
+        setLoadError(false);
       } catch (error) {
         if (cancelled) return;
 
@@ -118,116 +153,121 @@ const [inputQuery, setInputQuery] = useState(query);
   }, []);
 
   /* =========================================================
-     LOAD WISHLIST
-  ========================================================= */
+     LOAD ACCOUNT WISHLIST
+========================================================= */
 
   useEffect(() => {
     const loadWishlist = () => {
+      const wishlistKey = getWishlistKey();
+
+      if (!wishlistKey) {
+        setWishlist([]);
+        return;
+      }
+
       try {
         const saved = JSON.parse(
-          localStorage.getItem(WISHLIST_KEY) || "[]"
+          localStorage.getItem(wishlistKey) || "[]"
         );
 
         setWishlist(
           Array.isArray(saved) ? saved : []
         );
       } catch (error) {
-        console.error(
-          "SEARCH WISHLIST ERROR:",
-          error
-        );
-
+        console.error("SEARCH WISHLIST ERROR:", error);
         setWishlist([]);
       }
     };
 
     loadWishlist();
 
-    window.addEventListener(
-      "wishlistUpdated",
-      loadWishlist
-    );
+    window.addEventListener("wishlistUpdated", loadWishlist);
+    window.addEventListener("authChanged", loadWishlist);
+    window.addEventListener("authUpdated", loadWishlist);
+    window.addEventListener("storage", loadWishlist);
 
     return () => {
-      window.removeEventListener(
-        "wishlistUpdated",
-        loadWishlist
-      );
+      window.removeEventListener("wishlistUpdated", loadWishlist);
+      window.removeEventListener("authChanged", loadWishlist);
+      window.removeEventListener("authUpdated", loadWishlist);
+      window.removeEventListener("storage", loadWishlist);
     };
   }, []);
 
   /* =========================================================
      HANDLE SEARCH
-  ========================================================= */
+========================================================= */
 
   const handleSearch = (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  const trimmedQuery = inputQuery.trim();
+    const trimmedQuery = inputQuery.trim();
 
-  if (trimmedQuery) {
-    setSearchParams({ q: trimmedQuery });
-  } else {
-    setSearchParams({});
-  }
-};
+    if (trimmedQuery) {
+      setSearchParams({ q: trimmedQuery });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   /* =========================================================
      FILTER PRODUCTS
-  ========================================================= */
+========================================================= */
 
   const searchTerm = query.trim().toLowerCase();
 
-  const filteredProducts =
-    searchTerm === ""
-      ? []
-      : products.filter((product) => {
-          const name = String(
-            product.name || ""
-          ).toLowerCase();
+  const filteredProducts = products.filter((product) => {
+    if (!searchTerm) return false;
 
-          const category = String(
-            product.category || ""
-          ).toLowerCase();
+    const searchableFields = [
+      product.name,
+      product.title,
+      product.category,
+      product.description,
+      ...(Array.isArray(product.tags) ? product.tags : []),
+      ...(Array.isArray(product.features) ? product.features : []),
+    ];
 
-          const description = String(
-            product.description || ""
-          ).toLowerCase();
+    const searchableText = searchableFields
+      .filter(Boolean)
+      .map((value) => String(value))
+      .join(" ")
+      .toLowerCase();
 
-          const tags = Array.isArray(product.tags)
-            ? product.tags.join(" ").toLowerCase()
-            : String(product.tags || "").toLowerCase();
-
-          return (
-            name.includes(searchTerm) ||
-            category.includes(searchTerm) ||
-            description.includes(searchTerm) ||
-            tags.includes(searchTerm)
-          );
-        });
+    return searchableText.includes(searchTerm);
+  });
 
   /* =========================================================
      CHECK WISHLIST
-  ========================================================= */
+========================================================= */
 
   const isInWishlist = (productId) => {
+    if (!productId) return false;
+
     return wishlist.some(
       (item) =>
-        String(item._id || item.id) ===
+        String(item?._id || item?.id || "") ===
         String(productId)
     );
   };
 
   /* =========================================================
      TOGGLE WISHLIST
-  ========================================================= */
+========================================================= */
 
   const toggleWishlist = (product) => {
     const productId = product._id || product.id;
 
+    const wishlistKey = getWishlistKey();
+
+    if (!wishlistKey) {
+      navigate("/login");
+      return;
+    }
+
     try {
       const saved = JSON.parse(
-        localStorage.getItem(WISHLIST_KEY) || "[]"
+        localStorage.getItem(wishlistKey) || "[]"
       );
 
       const currentWishlist = Array.isArray(saved)
@@ -236,20 +276,26 @@ const [inputQuery, setInputQuery] = useState(query);
 
       const exists = currentWishlist.some(
         (item) =>
-          String(item._id || item.id) ===
+          String(item?._id || item?.id || "") ===
           String(productId)
       );
 
       const updatedWishlist = exists
         ? currentWishlist.filter(
             (item) =>
-              String(item._id || item.id) !==
+              String(item?._id || item?.id || "") !==
               String(productId)
           )
-        : [...currentWishlist, product];
+        : [
+            ...currentWishlist,
+            {
+              ...product,
+              _id: productId,
+            },
+          ];
 
       localStorage.setItem(
-        WISHLIST_KEY,
+        wishlistKey,
         JSON.stringify(updatedWishlist)
       );
 
@@ -259,19 +305,19 @@ const [inputQuery, setInputQuery] = useState(query);
         new Event("wishlistUpdated")
       );
     } catch (error) {
-      console.error(
-        "TOGGLE WISHLIST ERROR:",
-        error
-      );
+      console.error("TOGGLE WISHLIST ERROR:", error);
     }
   };
 
   /* =========================================================
      GET PRODUCT IMAGE
-  ========================================================= */
+========================================================= */
 
   const getImage = (product) => {
-    if (product.image) {
+    if (
+      typeof product.image === "string" &&
+      product.image.trim()
+    ) {
       return product.image;
     }
 
@@ -281,13 +327,20 @@ const [inputQuery, setInputQuery] = useState(query);
     ) {
       const firstImage = product.images[0];
 
-      // Also support image objects if your API returns them.
       if (typeof firstImage === "string") {
-        return firstImage;
+        return firstImage || PLACEHOLDER_IMAGE;
       }
 
       if (firstImage?.url) {
         return firstImage.url;
+      }
+
+      if (firstImage?.image) {
+        return firstImage.image;
+      }
+
+      if (firstImage?.src) {
+        return firstImage.src;
       }
     }
 
@@ -296,7 +349,7 @@ const [inputQuery, setInputQuery] = useState(query);
 
   /* =========================================================
      FORMAT PRICE
-  ========================================================= */
+========================================================= */
 
   const formatPrice = (price) => {
     return `Rs. ${Number(
@@ -306,7 +359,7 @@ const [inputQuery, setInputQuery] = useState(query);
 
   /* =========================================================
      RETURN
-  ========================================================= */
+========================================================= */
 
   return (
     <main className="mamta-search-page">
@@ -341,22 +394,25 @@ const [inputQuery, setInputQuery] = useState(query);
               strokeWidth={1.6}
             />
 
-           <input
-  type="text"
-  value={inputQuery}
-  onChange={(e) => setInputQuery(e.target.value)}
-  placeholder="Search pillows..."
-  autoFocus
-/>
+            <input
+              key={query}
+              type="text"
+              defaultValue={query}
+              onChange={(e) =>
+                setInputQuery(e.target.value)
+              }
+              placeholder="Search pillows..."
+              autoFocus
+            />
 
-            {query && (
+            {inputQuery && (
               <button
                 type="button"
                 className="search-clear"
-              onClick={() => {
-  setInputQuery("");
-  setSearchParams({});
-}}
+                onClick={() => {
+                  setInputQuery("");
+                  setSearchParams({});
+                }}
                 aria-label="Clear search"
               >
                 <X size={18} />
@@ -403,10 +459,9 @@ const [inputQuery, setInputQuery] = useState(query);
               {!loading && !loadError && (
                 <p>
                   {filteredProducts.length}{" "}
-                  product
-                  {filteredProducts.length !== 1
-                    ? "s"
-                    : ""}
+                  {filteredProducts.length === 1
+                    ? "product"
+                    : "products"}
                 </p>
               )}
 
@@ -433,10 +488,12 @@ const [inputQuery, setInputQuery] = useState(query);
             <div className="search-message">
 
               <div className="empty-search-icon">
+
                 <SearchIcon
                   size={34}
                   strokeWidth={1.3}
                 />
+
               </div>
 
               <h3>
@@ -606,7 +663,7 @@ const [inputQuery, setInputQuery] = useState(query);
                       <div className="search-product-info">
 
                         <h3>
-                          {product.name}
+                          {product.name || product.title}
                         </h3>
 
                         <div className="search-rating">
@@ -636,11 +693,13 @@ const [inputQuery, setInputQuery] = useState(query);
                             {formatPrice(product.price)}
                           </strong>
 
-                          {product.oldPrice && (
-                            <del>
-                              {formatPrice(product.oldPrice)}
-                            </del>
-                          )}
+                          {product.oldPrice &&
+                            Number(product.oldPrice) >
+                              Number(product.price) && (
+                              <del>
+                                {formatPrice(product.oldPrice)}
+                              </del>
+                            )}
 
                         </div>
 
