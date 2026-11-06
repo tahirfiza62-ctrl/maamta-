@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import toast from "react-hot-toast";
 
 import {
@@ -12,6 +13,14 @@ import {
 } from "lucide-react";
 
 import "./Wishlist.css";
+
+/* =========================================================
+   API
+========================================================= */
+
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://maamta.onrender.com/api";
 
 /* =========================================================
    USER + WISHLIST HELPERS
@@ -32,7 +41,6 @@ const getCurrentUser = () => {
 
     const parsedUser = JSON.parse(storedUser);
 
-    // Support both direct user objects and nested user objects.
     return parsedUser?.user || parsedUser;
   } catch (error) {
     console.error("USER READ ERROR:", error);
@@ -56,7 +64,15 @@ const getWishlistKey = (user) => {
   )}`;
 };
 
+/* Supports both string IDs and product objects */
 const getProductId = (product) => {
+  if (
+    typeof product === "string" ||
+    typeof product === "number"
+  ) {
+    return product;
+  }
+
   return product?._id || product?.id || null;
 };
 
@@ -68,9 +84,7 @@ const getProductImage = (product) => {
     return product.image;
   }
 
-  if (
-    typeof product?.images?.[0] === "string"
-  ) {
+  if (typeof product?.images?.[0] === "string") {
     return product.images[0];
   }
 
@@ -84,9 +98,27 @@ const getProductImage = (product) => {
 const getRating = (product) => {
   const rating = Number(product?.rating);
 
-  if (Number.isNaN(rating)) return 5;
+  if (!Number.isFinite(rating)) return 5;
 
   return Math.min(Math.max(rating, 0), 5);
+};
+
+const getProductList = (data) => {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.products)) {
+    return data.products;
+  }
+
+  if (Array.isArray(data?.data?.products)) {
+    return data.data.products;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
 };
 
 /* =========================================================
@@ -123,21 +155,106 @@ const Wishlist = () => {
 
   const [wishlist, setWishlist] = useState([]);
   const [cart, setCart] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const userId = getUserIdentifier(currentUser);
   const wishlistKey = getWishlistKey(currentUser);
 
   /* =======================================================
-     REFRESH USER AND WISHLIST
+     REFRESH USER + LOAD WISHLIST PRODUCTS
   ======================================================== */
 
   useEffect(() => {
-    const refreshWishlist = () => {
-      const user = getCurrentUser();
-      const key = getWishlistKey(user);
+    let isMounted = true;
 
-      setCurrentUser(user);
-      setWishlist(readWishlist(key));
+    const refreshWishlist = async () => {
+      try {
+        const user = getCurrentUser();
+        const key = getWishlistKey(user);
+
+        if (isMounted) {
+          setCurrentUser(user);
+          setLoading(true);
+        }
+
+        if (!key) {
+          if (isMounted) {
+            setWishlist([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const savedItems = readWishlist(key);
+
+        if (!savedItems.length) {
+          if (isMounted) {
+            setWishlist([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // If all saved items are complete product objects,
+        // display them directly.
+        const allAreObjects = savedItems.every(
+          (item) =>
+            item !== null &&
+            typeof item === "object"
+        );
+
+        if (allAreObjects) {
+          if (isMounted) {
+            setWishlist(
+              savedItems.filter((item) => getProductId(item))
+            );
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Fetch full product information for saved IDs.
+        const response = await axios.get(
+          `${API_URL}/products`,
+          { timeout: 30000 }
+        );
+
+        const productList = getProductList(response.data);
+
+        // Match saved IDs with actual backend products.
+        const matchedProducts = savedItems
+          .map((savedItem) => {
+            if (
+              savedItem &&
+              typeof savedItem === "object"
+            ) {
+              return savedItem;
+            }
+
+            return productList.find(
+              (product) =>
+                String(getProductId(product)) ===
+                String(savedItem)
+            );
+          })
+          .filter(Boolean);
+
+        if (isMounted) {
+          setWishlist(matchedProducts);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error(
+          "WISHLIST LOAD ERROR:",
+          error.response?.data || error.message
+        );
+
+        if (isMounted) {
+          setWishlist([]);
+          setLoading(false);
+          toast.error("Unable to load wishlist products.");
+        }
+      }
     };
 
     refreshWishlist();
@@ -163,6 +280,8 @@ const Wishlist = () => {
     );
 
     return () => {
+      isMounted = false;
+
       window.removeEventListener(
         "authChanged",
         refreshWishlist
@@ -184,14 +303,6 @@ const Wishlist = () => {
       );
     };
   }, []);
-
-  /* =======================================================
-     LOAD WISHLIST WHEN ACCOUNT CHANGES
-  ======================================================== */
-
-  useEffect(() => {
-    setWishlist(readWishlist(wishlistKey));
-  }, [wishlistKey]);
 
   /* =======================================================
      LOAD CART
@@ -246,7 +357,13 @@ const Wishlist = () => {
       JSON.stringify(updatedWishlist)
     );
 
-    setWishlist(updatedWishlist);
+    setWishlist((previous) =>
+      previous.filter(
+        (item) =>
+          String(getProductId(item)) !==
+          String(productId)
+      )
+    );
 
     window.dispatchEvent(
       new Event("wishlistUpdated")
@@ -316,7 +433,7 @@ const Wishlist = () => {
     );
 
     toast.success(
-      `${product.name || "Product"} added to cart.`
+      `${product.name || product.title || "Product"} added to cart.`
     );
   };
 
@@ -473,9 +590,16 @@ const Wishlist = () => {
 
           </div>
 
-          {/* EMPTY STATE */}
+          {/* LOADING */}
 
-          {wishlist.length === 0 ? (
+          {loading ? (
+            <div className="wishlist-empty">
+              <p>Loading your saved products...</p>
+            </div>
+          ) : wishlist.length === 0 ? (
+
+            /* EMPTY STATE */
+
             <div className="wishlist-empty">
 
               <div className="wishlist-empty-heart">
@@ -510,6 +634,11 @@ const Wishlist = () => {
                 const rating = getRating(item);
 
                 if (!productId) return null;
+
+                const hasSale =
+                  item.salePrice &&
+                  Number(item.salePrice) <
+                    Number(item.price);
 
                 return (
                   <article
@@ -550,13 +679,11 @@ const Wishlist = () => {
                         />
                       </button>
 
-                      {item.salePrice &&
-                        Number(item.salePrice) <
-                          Number(item.price) && (
-                          <span className="wishlist-sale-badge">
-                            SALE
-                          </span>
-                        )}
+                      {hasSale && (
+                        <span className="wishlist-sale-badge">
+                          SALE
+                        </span>
+                      )}
 
                     </div>
 
@@ -608,9 +735,7 @@ const Wishlist = () => {
 
                       <div className="wishlist-product-price">
 
-                        {item.salePrice &&
-                        Number(item.salePrice) <
-                          Number(item.price) ? (
+                        {hasSale ? (
                           <>
                             <span className="wishlist-sale-price">
                               Rs.{" "}

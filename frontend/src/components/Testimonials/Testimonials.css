@@ -658,3 +658,30 @@
 .testimonial-slider:hover .testimonial-track {
   animation-play-state: paused;
 }
+/* =========================================================
+   FASTER TESTIMONIAL MOVEMENT — ALL SCREEN SIZES
+========================================================= */
+
+/* Desktop */
+.testimonial-track {
+  animation-duration: 35s !important;
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .testimonial-track {
+    animation-duration: 30s !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .testimonial-track {
+    animation-duration: 25s !important;
+  }
+}
+
+/* Pause on hover */
+.testimonial-slider:hover .testimonial-track {
+  animation-play-state: paused;
+}
