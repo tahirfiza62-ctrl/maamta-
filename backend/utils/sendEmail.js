@@ -1,6 +1,10 @@
 
 const nodemailer = require("nodemailer");
 
+// =========================================================
+// GMAIL TRANSPORTER
+// =========================================================
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
 
@@ -8,42 +12,38 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+
+  // Prevent SMTP from hanging indefinitely
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
+// =========================================================
+// SEND VERIFICATION EMAIL
+// =========================================================
 
-const sendVerificationEmail = async (
-  email,
-  name,
-  code
-) => {
+const sendVerificationEmail = async (email, name, code) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    throw new Error("EMAIL_USER or EMAIL_PASSWORD is missing.");
+  }
 
   const mailOptions = {
     from: `"MAMTA" <${process.env.EMAIL_USER}>`,
-
     to: email,
-
     subject: "Your MAMTA verification code",
 
     html: `
       <!DOCTYPE html>
-
       <html>
-
         <head>
-
           <meta charset="UTF-8" />
-
           <meta
             name="viewport"
             content="width=device-width, initial-scale=1.0"
           />
-
-          <title>
-            Your MAMTA verification code
-          </title>
-
+          <title>Your MAMTA verification code</title>
         </head>
-
 
         <body
           style="
@@ -54,7 +54,6 @@ const sendVerificationEmail = async (
             color: #4a3032;
           "
         >
-
           <div
             style="
               max-width: 600px;
@@ -62,9 +61,7 @@ const sendVerificationEmail = async (
               background: #ffffff;
               border-radius: 22px;
               overflow: hidden;
-              box-shadow:
-                0 15px 50px
-                rgba(74, 48, 50, 0.08);
+              box-shadow: 0 15px 50px rgba(74, 48, 50, 0.08);
             "
           >
 
@@ -77,7 +74,6 @@ const sendVerificationEmail = async (
                 background: #4a3032;
               "
             >
-
               <div
                 style="
                   color: #ffffff;
@@ -99,9 +95,7 @@ const sendVerificationEmail = async (
               >
                 THOUGHTFUL COMFORT
               </div>
-
             </div>
-
 
             <!-- CONTENT -->
 
@@ -111,7 +105,6 @@ const sendVerificationEmail = async (
                 text-align: center;
               "
             >
-
               <div
                 style="
                   width: 70px;
@@ -128,7 +121,6 @@ const sendVerificationEmail = async (
                 ♡
               </div>
 
-
               <h1
                 style="
                   margin: 0 0 15px;
@@ -140,7 +132,6 @@ const sendVerificationEmail = async (
                 Verify your email
               </h1>
 
-
               <p
                 style="
                   margin: 0 0 15px;
@@ -150,7 +141,6 @@ const sendVerificationEmail = async (
               >
                 Hi ${name},
               </p>
-
 
               <p
                 style="
@@ -166,8 +156,7 @@ const sendVerificationEmail = async (
                 complete your registration.
               </p>
 
-
-              <!-- CODE -->
+              <!-- VERIFICATION CODE -->
 
               <div
                 style="
@@ -185,7 +174,6 @@ const sendVerificationEmail = async (
                 ${code}
               </div>
 
-
               <p
                 style="
                   margin: 0;
@@ -198,7 +186,6 @@ const sendVerificationEmail = async (
                 <strong>24 hours.</strong>
               </p>
 
-
               <p
                 style="
                   margin: 15px 0 0;
@@ -210,9 +197,7 @@ const sendVerificationEmail = async (
                 If you did not create a MAMTA account,
                 you can safely ignore this email.
               </p>
-
             </div>
-
 
             <!-- FOOTER -->
 
@@ -226,24 +211,35 @@ const sendVerificationEmail = async (
               "
             >
               © ${new Date().getFullYear()}
-              MAMTA.
-              All rights reserved.
+              MAMTA. All rights reserved.
             </div>
 
           </div>
-
         </body>
-
       </html>
     `,
   };
 
+  const startTime = Date.now();
 
-  await transporter.sendMail(mailOptions);
+  try {
+    const result = await transporter.sendMail(mailOptions);
+
+    console.log(
+      `VERIFICATION EMAIL SENT in ${Date.now() - startTime} ms`
+    );
+
+    return result;
+  } catch (error) {
+    console.error("EMAIL SENDING FAILED:", error.message);
+    throw error;
+  }
 };
 
+// =========================================================
+// EXPORT
+// =========================================================
 
 module.exports = {
   sendVerificationEmail,
 };
-
