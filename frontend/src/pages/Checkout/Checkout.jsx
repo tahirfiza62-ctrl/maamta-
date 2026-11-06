@@ -318,8 +318,8 @@ const Checkout = () => {
     0
   );
 
-  const shipping =
-    0
+  // FREE SHIPPING ON ALL ORDERS
+  const shipping = 0;
 
   const total = subtotal + shipping;
 
@@ -431,25 +431,25 @@ const Checkout = () => {
 
         window.dispatchEvent(new Event("cartChanged"));
 
-      
-if (orderId) {
-  // Keep a copy so the confirmation page still works
-  // if the customer refreshes the page.
-  sessionStorage.setItem(
-    `mamta_recent_order_${orderId}`,
-    JSON.stringify(createdOrder)
-  );
+        if (orderId) {
+          // Keep a copy so the confirmation page still works
+          // if the customer refreshes the page.
+          sessionStorage.setItem(
+            `mamta_recent_order_${orderId}`,
+            JSON.stringify(createdOrder)
+          );
 
-  navigate(`/order-success/${orderId}`, {
-    state: {
-      order: createdOrder,
-    },
-  });
-} else {
-  alert(
-    "Your order was placed, but we couldn't retrieve its details."
-  );
-}
+          navigate(`/order-success/${orderId}`, {
+            state: {
+              order: createdOrder,
+            },
+          });
+        } else {
+          alert(
+            "Your order was placed, but we couldn't retrieve its details."
+          );
+        }
+
         return;
       }
 
@@ -956,12 +956,7 @@ if (orderId) {
 
             <div>
               <span>Shipping</span>
-
-              <strong>
-                {shipping === 0
-                  ? "Included"
-                  : `Rs. ${shipping.toLocaleString()}`}
-              </strong>
+              <strong>FREE</strong>
             </div>
 
             <div className="summary-total">
@@ -973,57 +968,27 @@ if (orderId) {
             </div>
           </div>
 
-          {/* SHIPPING NOTE */}
+          {/* FREE SHIPPING NOTE - DISPLAYED ONCE */}
 
           <div className="checkout-delivery-note">
             <TruckIcon />
 
             <div>
-              <strong>
-                {shipping === 0
-                  ? "Shipping Included"
-                  : "Shipping Charges"}
-              </strong>
-
-              <span>
-                {shipping === 0
-                  ? "No additional shipping charge."
-                  : `Rs. ${shipping.toLocaleString()} delivery charge.`}
-              </span>
+              <strong>Free Shipping</strong>
+              <span>Delivery charges are covered by MAMTA.</span>
             </div>
           </div>
 
-   <div>
-  <span>Shipping</span>
-  <strong>FREE</strong>
-</div>
-<div className="checkout-delivery-note">
-  <TruckIcon />
+          {/* ESTIMATED DELIVERY - DISPLAYED ONCE */}
 
-  <div>
-    <strong>Free Shipping</strong>
-    <span>Delivery charges are covered by MAMTA.</span>
-  </div>
-</div>
-
-          {/* DELIVERY TIME */}
-<div className="checkout-delivery-note">
-  <TruckIcon />
-
-  <div>
-    <strong>Free Shipping</strong>
-    <span>Delivery charges are covered by MAMTA.</span>
-  </div>
-</div>
           <div className="checkout-delivery-note">
-  <MapPin size={20} />
+            <MapPin size={20} />
 
-  <div>
-    <strong>Estimated Delivery</strong>
-    <span>3–4 working days</span>
-  </div>
-</div>
-
+            <div>
+              <strong>Estimated Delivery</strong>
+              <span>3–4 working days</span>
+            </div>
+          </div>
 
           {/* SECURE NOTE */}
 
