@@ -637,3 +637,190 @@
     animation: none !important;
   }
 }
+
+/* =========================================================
+   MAMTA — PINK BACKGROUND + LARGER FONTS
+========================================================= */
+
+/* Main pinkish background */
+.featured-products {
+  background: linear-gradient(
+    180deg,
+    #f9e8e9 0%,
+    #f6dfe1 50%,
+    #fff0ed 100%
+  );
+}
+
+/* Section heading */
+.featured-eyebrow {
+  font-size: 15px;
+}
+
+.featured-title {
+  font-size: clamp(38px, 4vw, 53px);
+}
+
+.featured-intro {
+  font-size: 16px;
+}
+
+/* View all button */
+.view-all-products {
+  font-size: 15px;
+}
+
+/* Product cards */
+.product-card {
+  background: #fffaf8;
+  border-color: rgba(189, 111, 124, 0.16);
+}
+
+/* Product category */
+.product-category {
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+/* Product name */
+.product-name {
+  font-size: 19px;
+  min-height: 50px;
+}
+
+/* Rating */
+.product-rating > span {
+  font-size: 15px;
+}
+
+/* Product price */
+.current-price {
+  font-size: 17px;
+}
+
+.old-price {
+  font-size: 15px;
+}
+
+/* Quick view */
+.quick-view {
+  font-size: 15px;
+}
+
+/* Wishlist button */
+.wishlist-button {
+  width: 43px;
+  height: 43px;
+}
+
+/* Empty state */
+.featured-empty p {
+  font-size: 16px;
+}
+
+.featured-empty a {
+  font-size: 15px;
+}
+
+/* Tablet */
+@media (max-width: 768px) {
+  .featured-eyebrow {
+    font-size: 15px;
+  }
+
+  .featured-title {
+    font-size: 39px;
+  }
+
+  .featured-intro {
+    font-size: 15px;
+  }
+
+  .product-name {
+    font-size: 17px;
+  }
+
+  .product-category {
+    font-size: 15px;
+  }
+
+  .current-price {
+    font-size: 16px;
+  }
+
+  .old-price,
+  .product-rating > span {
+    font-size: 15px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .featured-products {
+    padding: 60px 0 65px;
+  }
+
+  .featured-title {
+    font-size: 34px;
+  }
+
+  .featured-intro {
+    font-size: 15px;
+  }
+
+  .featured-eyebrow {
+    font-size: 15px;
+    letter-spacing: 1px;
+  }
+
+  .view-all-products {
+    font-size: 15px;
+  }
+
+  .product-info {
+    padding: 14px 10px 16px;
+  }
+
+  .product-category {
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+
+  .product-name {
+    font-size: 16px;
+    min-height: 48px;
+  }
+
+  .product-rating > span {
+    font-size: 15px;
+  }
+
+  .product-price {
+    gap: 5px;
+  }
+
+  .current-price {
+    font-size: 15px;
+  }
+
+  .old-price {
+    font-size: 15px;
+  }
+
+  .wishlist-button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+  .product-name {
+    font-size: 15px;
+  }
+
+  .current-price,
+  .old-price {
+    font-size: 15px;
+  }
+}
