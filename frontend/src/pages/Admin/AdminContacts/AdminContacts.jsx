@@ -24,7 +24,7 @@ const API_BASE = (
   "https://maamta.onrender.com/api"
 ).replace(/\/+$/, "");
 
-const CONTACTS_URL = `${API_BASE}/admin/contact`;
+const CONTACTS_URL = `${API_BASE}/contact`;
 
 const TOKEN_KEY = "mamta_admin_token";
 const USER_KEY = "mamta_admin_user";
