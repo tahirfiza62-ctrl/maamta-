@@ -20,23 +20,21 @@ import "./Account.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://mamta-app-8.onrender.com//api";
+  "https://maamta.onrender.com/api";
 
 const Account = () => {
   const navigate = useNavigate();
 
-  // =====================================================
-  // STATES
-  // =====================================================
+  /* =====================================================
+     STATES
+  ===================================================== */
 
-  // Read the saved user when the component initializes.
-  // This avoids calling setState synchronously in useEffect.
   const [user] = useState(() => {
-    const storedUser = localStorage.getItem("mamta_user");
+    const storedUser =
+      localStorage.getItem("mamta_user") ||
+      localStorage.getItem("mamta_user_data");
 
-    if (!storedUser) {
-      return null;
-    }
+    if (!storedUser) return null;
 
     try {
       return JSON.parse(storedUser);
@@ -58,41 +56,48 @@ const Account = () => {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // =====================================================
-  // CHECK LOGIN
-  // =====================================================
+  /* =====================================================
+     CHECK LOGIN
+  ===================================================== */
 
   useEffect(() => {
     const token = localStorage.getItem("mamta_user_token");
-    const storedUser = localStorage.getItem("mamta_user");
 
-    if (!token || !storedUser || !user) {
+    if (!token || !user) {
       localStorage.removeItem("mamta_user");
       localStorage.removeItem("mamta_user_token");
+
+      window.dispatchEvent(new Event("authChanged"));
+      window.dispatchEvent(new Event("authUpdated"));
 
       navigate("/login", { replace: true });
     }
   }, [navigate, user]);
 
-  // =====================================================
-  // LOGOUT
-  // =====================================================
+  /* =====================================================
+     LOGOUT
+  ===================================================== */
 
   const handleLogout = () => {
+    // Remove login information only.
+    // DO NOT remove the account's wishlist.
     localStorage.removeItem("mamta_user_token");
     localStorage.removeItem("mamta_user");
-
     localStorage.removeItem("mamta_token");
     localStorage.removeItem("mamta_user_data");
 
+    // Notify Header and other components.
     window.dispatchEvent(new Event("authChanged"));
+    window.dispatchEvent(new Event("authUpdated"));
+    window.dispatchEvent(new Event("wishlistUpdated"));
+    window.dispatchEvent(new Event("cartChanged"));
 
     navigate("/login", { replace: true });
   };
 
-  // =====================================================
-  // PASSWORD INPUT
-  // =====================================================
+  /* =====================================================
+     PASSWORD INPUT
+  ===================================================== */
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
@@ -106,9 +111,9 @@ const Account = () => {
     setPasswordMessage("");
   };
 
-  // =====================================================
-  // CHANGE PASSWORD
-  // =====================================================
+  /* =====================================================
+     CHANGE PASSWORD
+  ===================================================== */
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -172,6 +177,8 @@ const Account = () => {
         localStorage.removeItem("mamta_user");
 
         window.dispatchEvent(new Event("authChanged"));
+        window.dispatchEvent(new Event("authUpdated"));
+        window.dispatchEvent(new Event("wishlistUpdated"));
 
         navigate("/login", { replace: true });
         return;
@@ -186,9 +193,9 @@ const Account = () => {
     }
   };
 
-  // =====================================================
-  // LOADING
-  // =====================================================
+  /* =====================================================
+     LOADING
+  ===================================================== */
 
   if (!user) {
     return (
@@ -198,9 +205,9 @@ const Account = () => {
     );
   }
 
-  // =====================================================
-  // PAGE
-  // =====================================================
+  /* =====================================================
+     PAGE
+  ===================================================== */
 
   return (
     <main className="account-page">
@@ -246,8 +253,6 @@ const Account = () => {
           {/* MENU */}
 
           <div className="account-menu">
-            {/* OVERVIEW */}
-
             <button
               type="button"
               className={
@@ -258,13 +263,9 @@ const Account = () => {
               onClick={() => setActiveSection("overview")}
             >
               <UserRound size={18} />
-
               <span>Account Overview</span>
-
               <ChevronRight size={16} />
             </button>
-
-            {/* MY ORDERS */}
 
             <button
               type="button"
@@ -276,13 +277,9 @@ const Account = () => {
               onClick={() => setActiveSection("orders")}
             >
               <Package size={18} />
-
               <span>My Orders</span>
-
               <ChevronRight size={16} />
             </button>
-
-            {/* PASSWORD */}
 
             <button
               type="button"
@@ -294,9 +291,7 @@ const Account = () => {
               onClick={() => setActiveSection("password")}
             >
               <LockKeyhole size={18} />
-
               <span>Change Password</span>
-
               <ChevronRight size={16} />
             </button>
           </div>
@@ -306,7 +301,6 @@ const Account = () => {
           <div className="account-sidebar-bottom">
             <Link to="/shop" className="continue-shopping">
               <ShoppingBag size={17} />
-
               <span>Continue Shopping</span>
             </Link>
 
@@ -316,7 +310,6 @@ const Account = () => {
               onClick={handleLogout}
             >
               <LogOut size={17} />
-
               <span>Logout</span>
             </button>
           </div>
@@ -338,11 +331,7 @@ const Account = () => {
                 <ShieldCheck size={25} />
               </div>
 
-              {/* DETAILS */}
-
               <div className="details-grid">
-                {/* NAME */}
-
                 <div className="detail-card">
                   <div className="detail-icon">
                     <UserRound size={20} />
@@ -354,8 +343,6 @@ const Account = () => {
                   </div>
                 </div>
 
-                {/* EMAIL */}
-
                 <div className="detail-card">
                   <div className="detail-icon">
                     <Mail size={20} />
@@ -366,8 +353,6 @@ const Account = () => {
                     <strong>{user.email}</strong>
                   </div>
                 </div>
-
-                {/* PASSWORD */}
 
                 <div className="detail-card">
                   <div className="detail-icon">
@@ -384,8 +369,6 @@ const Account = () => {
                   </div>
                 </div>
 
-                {/* STATUS */}
-
                 <div className="detail-card">
                   <div className="detail-icon">
                     <ShieldCheck size={20} />
@@ -400,8 +383,6 @@ const Account = () => {
                   </div>
                 </div>
               </div>
-
-              {/* SECURITY NOTE */}
 
               <div className="security-note">
                 <div className="security-note-icon">
@@ -421,16 +402,12 @@ const Account = () => {
                 </div>
               </div>
 
-              {/* QUICK ACCESS */}
-
               <div className="quick-section">
                 <span className="quick-label">
                   QUICK ACCESS
                 </span>
 
                 <div className="quick-grid">
-                  {/* ORDERS */}
-
                   <button
                     type="button"
                     className="quick-card"
@@ -445,8 +422,6 @@ const Account = () => {
 
                     <ChevronRight size={17} />
                   </button>
-
-                  {/* SECURITY */}
 
                   <button
                     type="button"
@@ -524,8 +499,6 @@ const Account = () => {
                 <LockKeyhole size={25} />
               </div>
 
-              {/* INTRO */}
-
               <div className="password-intro">
                 <ShieldCheck size={20} />
 
@@ -536,15 +509,11 @@ const Account = () => {
                 </p>
               </div>
 
-              {/* ERROR */}
-
               {passwordError && (
                 <div className="password-error" role="alert">
                   {passwordError}
                 </div>
               )}
-
-              {/* SUCCESS */}
 
               {passwordMessage && (
                 <div className="password-success" role="status">
@@ -552,14 +521,10 @@ const Account = () => {
                 </div>
               )}
 
-              {/* FORM */}
-
               <form
                 className="change-password-form"
                 onSubmit={handleChangePassword}
               >
-                {/* CURRENT */}
-
                 <div className="password-field">
                   <label htmlFor="currentPassword">
                     CURRENT PASSWORD
@@ -580,8 +545,6 @@ const Account = () => {
                     />
                   </div>
                 </div>
-
-                {/* NEW */}
 
                 <div className="password-field">
                   <label htmlFor="newPassword">
@@ -605,8 +568,6 @@ const Account = () => {
                   </div>
                 </div>
 
-                {/* CONFIRM */}
-
                 <div className="password-field">
                   <label htmlFor="confirmPassword">
                     CONFIRM NEW PASSWORD
@@ -628,8 +589,6 @@ const Account = () => {
                     />
                   </div>
                 </div>
-
-                {/* BUTTON */}
 
                 <button
                   type="submit"

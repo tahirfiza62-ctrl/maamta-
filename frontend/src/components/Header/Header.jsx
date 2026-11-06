@@ -112,7 +112,7 @@ const Header = () => {
   };
 
   /* =====================================================
-     LOAD USER + ACCOUNT WISHLIST
+     LOAD LOGIN STATUS + ACCOUNT WISHLIST COUNT
   ===================================================== */
 
   useEffect(() => {
@@ -121,11 +121,16 @@ const Header = () => {
       const user = getCurrentUser();
 
       const loggedIn = Boolean(token && user);
-      const wishlistKey = loggedIn
-        ? getWishlistKey(user)
-        : null;
-
       setIsLoggedIn(loggedIn);
+
+      // Logout: immediately hide and clear the displayed count.
+      // Do not delete the saved wishlist from localStorage.
+      if (!loggedIn) {
+        setWishlist([]);
+        return;
+      }
+
+      const wishlistKey = getWishlistKey(user);
 
       if (!wishlistKey) {
         setWishlist([]);
@@ -324,6 +329,8 @@ const Header = () => {
         {/* HEADER ACTIONS */}
 
         <div className="header-actions">
+          {/* SEARCH */}
+
           <Link
             to="/search"
             className="header-icon"

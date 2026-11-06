@@ -29,8 +29,40 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://maamta.onrender.com/api";
 
-const WISHLIST_KEY = "mamta_wishlist";
 const GUEST_CART_KEY = "mamta_guest_cart";
+
+/* =========================================================
+   USER + WISHLIST HELPERS
+========================================================= */
+
+const getCurrentUser = () => {
+  try {
+    const storedUser =
+      localStorage.getItem("mamta_user") ||
+      localStorage.getItem("mamta_user_data") ||
+      localStorage.getItem("currentUser");
+
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error("USER READ ERROR:", error);
+    return null;
+  }
+};
+
+const getWishlistKey = () => {
+  const token = localStorage.getItem("mamta_user_token");
+  const user = getCurrentUser();
+
+  if (!token || !user) return null;
+
+  const userId = user._id || user.id || user.email;
+
+  if (!userId) return null;
+
+  return `mamta_wishlist_${encodeURIComponent(
+    String(userId).toLowerCase()
+  )}`;
+};
 
 /* =========================================================
    CATEGORIES
@@ -64,21 +96,44 @@ const Shop = () => {
   const [sortBy, setSortBy] = useState("featured");
   const [wishlist, setWishlist] = useState([]);
 
+  const [wishlistKey, setWishlistKey] = useState(
+    () => getWishlistKey()
+  );
+
   /* =======================================================
-     LOAD WISHLIST
+     LOAD ACCOUNT WISHLIST
   ======================================================== */
 
   useEffect(() => {
+    const refreshWishlistKey = () => {
+      setWishlistKey(getWishlistKey());
+    };
+
+    refreshWishlistKey();
+
+    window.addEventListener("authChanged", refreshWishlistKey);
+    window.addEventListener("authUpdated", refreshWishlistKey);
+    window.addEventListener("storage", refreshWishlistKey);
+
+    return () => {
+      window.removeEventListener("authChanged", refreshWishlistKey);
+      window.removeEventListener("authUpdated", refreshWishlistKey);
+      window.removeEventListener("storage", refreshWishlistKey);
+    };
+  }, []);
+
+  useEffect(() => {
     const loadWishlist = () => {
+      if (!wishlistKey) {
+        setWishlist([]);
+        return;
+      }
+
       try {
-        const savedWishlist = localStorage.getItem(WISHLIST_KEY);
-
-        if (!savedWishlist) {
-          setWishlist([]);
-          return;
-        }
-
-        const parsedWishlist = JSON.parse(savedWishlist);
+        const savedWishlist = localStorage.getItem(wishlistKey);
+        const parsedWishlist = savedWishlist
+          ? JSON.parse(savedWishlist)
+          : [];
 
         setWishlist(
           Array.isArray(parsedWishlist) ? parsedWishlist : []
@@ -98,7 +153,7 @@ const Shop = () => {
       window.removeEventListener("wishlistUpdated", loadWishlist);
       window.removeEventListener("storage", loadWishlist);
     };
-  }, []);
+  }, [wishlistKey]);
 
   /* =======================================================
      FETCH PRODUCTS
@@ -119,21 +174,15 @@ const Shop = () => {
 
         console.log("PRODUCT API RESPONSE:", response.data);
 
-        console.log(
-          "ALL PRODUCT CATEGORIES + IMAGES:",
-          response.data.products?.map((product) => ({
-            name: product.name,
-            category: product.category,
-            mainImage: product.image,
-            additionalImages: product.images,
-          }))
-        );
+        const productList = Array.isArray(response.data)
+          ? response.data
+          : response.data?.products ||
+            response.data?.data?.products ||
+            response.data?.data ||
+            [];
 
-        if (
-          response.data &&
-          Array.isArray(response.data.products)
-        ) {
-          setProducts(response.data.products);
+        if (Array.isArray(productList)) {
+          setProducts(productList);
         } else {
           console.error("INVALID PRODUCTS RESPONSE:", response.data);
           setProducts([]);
@@ -189,17 +238,15 @@ const Shop = () => {
           }
 
           if (typeof image === "object" && image !== null) {
-            return (
-              image.url ||
-              image.image ||
-              image.src ||
-              ""
-            );
+            return image.url || image.image || image.src || "";
           }
 
           return "";
         })
-        .filter((image) => typeof image === "string" && image.trim())
+        .filter(
+          (image) =>
+            typeof image === "string" && image.trim()
+        )
         .map((image) => image.trim());
 
       images.push(...additionalImages);
@@ -285,7 +332,8 @@ const Shop = () => {
 
     return wishlist.some(
       (item) =>
-        String(item?._id || item?.id || "") === String(productId)
+        String(item?._id || item?.id || "") ===
+        String(productId)
     );
   };
 
@@ -299,10 +347,26 @@ const Shop = () => {
       return;
     }
 
+    const activeWishlistKey = getWishlistKey();
+
+    if (!activeWishlistKey) {
+      toast.error("Please log in to save products to your wishlist.");
+      navigate("/login");
+      return;
+    }
+
     try {
-      const currentWishlist = Array.isArray(wishlist)
-        ? wishlist
-        : [];
+      // Read the latest saved list to avoid using outdated state.
+      let currentWishlist = [];
+
+      try {
+        const saved = localStorage.getItem(activeWishlistKey);
+        const parsed = saved ? JSON.parse(saved) : [];
+
+        currentWishlist = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        currentWishlist = [];
+      }
 
       const productId = String(product._id);
 
@@ -317,12 +381,12 @@ const Shop = () => {
             String(item?._id || item?.id || "") !== productId
         );
 
-        setWishlist(updatedWishlist);
-
         localStorage.setItem(
-          WISHLIST_KEY,
+          activeWishlistKey,
           JSON.stringify(updatedWishlist)
         );
+
+        setWishlist(updatedWishlist);
 
         window.dispatchEvent(new Event("wishlistUpdated"));
 
@@ -340,12 +404,12 @@ const Shop = () => {
         wishlistProduct,
       ];
 
-      setWishlist(updatedWishlist);
-
       localStorage.setItem(
-        WISHLIST_KEY,
+        activeWishlistKey,
         JSON.stringify(updatedWishlist)
       );
+
+      setWishlist(updatedWishlist);
 
       playWishlistSound();
 
@@ -561,8 +625,6 @@ const Shop = () => {
             }
           );
         } catch (error) {
-          // If the saved login session has expired,
-          // continue by using the guest cart.
           if (
             error.response?.status !== 401 &&
             error.response?.status !== 403
@@ -615,7 +677,6 @@ const Shop = () => {
       <main className="mamta-shop-page">
         <section className="shop-loading-section">
           <div className="shop-loading-spinner"></div>
-
           <p>Loading MAAMTA collection...</p>
         </section>
       </main>
@@ -628,7 +689,6 @@ const Shop = () => {
 
   return (
     <main className="mamta-shop-page">
-
       {/* SHOP HERO */}
 
       <section className="shop-hero">
@@ -679,7 +739,6 @@ const Shop = () => {
 
               <div className="hero-floating-card">
                 <span className="floating-card-small">MAAMTA</span>
-
                 <strong>
                   Made for
                   <br />
@@ -700,7 +759,6 @@ const Shop = () => {
       {/* SHOP CONTENT */}
 
       <section className="shop-container">
-
         {/* CATEGORY SECTION */}
 
         <div className="shop-category-section">
@@ -710,7 +768,6 @@ const Shop = () => {
                 <span className="section-eyebrow">
                   EXPLORE COLLECTIONS
                 </span>
-
                 <h2>Shop by category</h2>
               </div>
 
@@ -748,7 +805,6 @@ const Shop = () => {
           <div className="shop-toolbar">
             <div className="results-count">
               <SlidersHorizontal size={16} />
-
               <span>
                 {filteredProducts.length}{" "}
                 {filteredProducts.length === 1
@@ -813,7 +869,6 @@ const Shop = () => {
                         : ""
                     }`}
                   >
-
                     {/* PRODUCT IMAGE */}
 
                     <div className="product-image-wrapper">
@@ -953,7 +1008,6 @@ const Shop = () => {
                               size={16}
                               strokeWidth={1.7}
                             />
-
                             <span>Add</span>
                           </button>
                         </div>
@@ -965,8 +1019,6 @@ const Shop = () => {
             })}
           </div>
         ) : (
-          /* NO PRODUCTS */
-
           <ScrollReveal direction="up">
             <div className="no-products">
               <div className="no-products-icon">
