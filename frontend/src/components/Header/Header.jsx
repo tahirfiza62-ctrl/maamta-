@@ -12,9 +12,10 @@ import {
 
 import "./Header.css";
 
-const API_URL =
+const API_URL = (
   import.meta.env.VITE_API_URL ||
-  "https://maamta.onrender.com/api";
+  "https://maamta.onrender.com/api"
+).replace(/\/$/, "");
 
 /* =====================================================
    USER + WISHLIST HELPERS
@@ -46,6 +47,10 @@ const getWishlistKey = (user) => {
   )}`;
 };
 
+/* =====================================================
+   HEADER COMPONENT
+===================================================== */
+
 const Header = () => {
   const [wishlist, setWishlist] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -53,20 +58,28 @@ const Header = () => {
   const [cartBounce, setCartBounce] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const previousCartCount = useRef(0);
+  const previousCartCount = useRef(null);
+  const bounceTimeout = useRef(null);
 
   /* =====================================================
      CART SOUND
   ===================================================== */
 
-  const playCartSound = () => {
+  const playCartSound = async () => {
+    let audioContext;
+
     try {
-      const AudioContext =
+      const AudioContextClass =
         window.AudioContext || window.webkitAudioContext;
 
-      if (!AudioContext) return;
+      if (!AudioContextClass) return;
 
-      const audioContext = new AudioContext();
+      audioContext = new AudioContextClass();
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
@@ -94,21 +107,53 @@ const Header = () => {
 
       gainNode.gain.exponentialRampToValueAtTime(
         0.0001,
-        audioContext.currentTime + 0.16
+        audioContext.currentTime + 0.2
       );
 
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.16);
+      oscillator.onended = () => {
+        audioContext.close().catch(() => {});
+      };
 
-      setTimeout(() => {
-        audioContext.close();
-      }, 250);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.2);
     } catch (error) {
       console.error("CART SOUND ERROR:", error);
+
+      if (audioContext) {
+        audioContext.close().catch(() => {});
+      }
     }
+  };
+
+  /* =====================================================
+     UPDATE CART COUNT + SOUND + BOUNCE
+  ===================================================== */
+
+  const updateCartCount = (newCount) => {
+    const count = Number(newCount) || 0;
+    const previousCount = previousCartCount.current;
+
+    setCartCount(count);
+
+    // Play sound only when cart quantity increases.
+    if (previousCount !== null && count > previousCount) {
+      setCartBounce(true);
+
+      playCartSound();
+
+      if (bounceTimeout.current) {
+        clearTimeout(bounceTimeout.current);
+      }
+
+      bounceTimeout.current = setTimeout(() => {
+        setCartBounce(false);
+      }, 450);
+    }
+
+    previousCartCount.current = count;
   };
 
   /* =====================================================
@@ -121,10 +166,10 @@ const Header = () => {
       const user = getCurrentUser();
 
       const loggedIn = Boolean(token && user);
+
       setIsLoggedIn(loggedIn);
 
-      // Logout: immediately hide and clear the displayed count.
-      // Do not delete the saved wishlist from localStorage.
+      // Logout: hide count without deleting saved wishlist.
       if (!loggedIn) {
         setWishlist([]);
         return;
@@ -171,21 +216,67 @@ const Header = () => {
   ===================================================== */
 
   useEffect(() => {
-  const loadCartCount = async () => {
-    const token = localStorage.getItem("mamta_user_token");
+    let cancelled = false;
 
-    // GUEST CART
-    if (!token) {
+    const loadCartCount = async () => {
+      const token = localStorage.getItem("mamta_user_token");
+
+      // GUEST CART
+      if (!token) {
+        try {
+          const savedCart = JSON.parse(
+            localStorage.getItem("mamta_guest_cart") || "[]"
+          );
+
+          const items = Array.isArray(savedCart)
+            ? savedCart
+            : Array.isArray(savedCart?.items)
+              ? savedCart.items
+              : [];
+
+          const count = items.reduce(
+            (total, item) =>
+              total + Number(item.quantity || 0),
+            0
+          );
+
+          if (!cancelled) {
+            updateCartCount(count);
+          }
+        } catch (error) {
+          console.error("GUEST CART COUNT ERROR:", error);
+
+          if (!cancelled) {
+            updateCartCount(0);
+          }
+        }
+
+        return;
+      }
+
+      // LOGGED-IN CART
       try {
-        const savedCart = JSON.parse(
-          localStorage.getItem("mamta_guest_cart") || "[]"
-        );
+        const response = await fetch(`${API_URL}/cart`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-        const items = Array.isArray(savedCart)
-          ? savedCart
-          : Array.isArray(savedCart?.items)
-            ? savedCart.items
-            : [];
+        if (!response.ok) {
+          if (
+            response.status === 401 ||
+            response.status === 403
+          ) {
+            if (!cancelled) {
+              updateCartCount(0);
+            }
+          }
+
+          return;
+        }
+
+        const data = await response.json();
+        const items = data.cart?.items || [];
 
         const count = items.reduce(
           (total, item) =>
@@ -193,63 +284,40 @@ const Header = () => {
           0
         );
 
-        setCartCount(count);
-        previousCartCount.current = count;
-      } catch (error) {
-        console.error("GUEST CART COUNT ERROR:", error);
-        setCartCount(0);
-        previousCartCount.current = 0;
-      }
-
-      return;
-    }
-
-    // LOGGED-IN CART
-    try {
-      const response = await fetch(`${API_URL}/cart`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (
-          response.status === 401 ||
-          response.status === 403
-        ) {
-          setCartCount(0);
+        if (!cancelled) {
+          updateCartCount(count);
         }
-        return;
+      } catch (error) {
+        console.error("CART COUNT ERROR:", error);
       }
+    };
 
-      const data = await response.json();
-      const items = data.cart?.items || [];
+    loadCartCount();
 
-      const count = items.reduce(
-        (total, item) =>
-          total + Number(item.quantity || 0),
-        0
-      );
+    window.addEventListener("cartChanged", loadCartCount);
+    window.addEventListener("authChanged", loadCartCount);
+    window.addEventListener("storage", loadCartCount);
 
-      setCartCount(count);
-      previousCartCount.current = count;
-    } catch (error) {
-      console.error("CART COUNT ERROR:", error);
-    }
-  };
+    return () => {
+      cancelled = true;
 
-  loadCartCount();
+      window.removeEventListener("cartChanged", loadCartCount);
+      window.removeEventListener("authChanged", loadCartCount);
+      window.removeEventListener("storage", loadCartCount);
+    };
+  }, []);
 
-  window.addEventListener("cartChanged", loadCartCount);
-  window.addEventListener("authChanged", loadCartCount);
-  window.addEventListener("storage", loadCartCount);
+  /* =====================================================
+     CLEANUP BOUNCE TIMER
+  ===================================================== */
 
-  return () => {
-    window.removeEventListener("cartChanged", loadCartCount);
-    window.removeEventListener("authChanged", loadCartCount);
-    window.removeEventListener("storage", loadCartCount);
-  };
-}, []);
+  useEffect(() => {
+    return () => {
+      if (bounceTimeout.current) {
+        clearTimeout(bounceTimeout.current);
+      }
+    };
+  }, []);
 
   /* =====================================================
      CLOSE MOBILE MENU ON DESKTOP
@@ -318,6 +386,7 @@ const Header = () => {
       {/* MAIN HEADER */}
 
       <div className="main-header">
+
         {/* LOGO */}
 
         <Link
@@ -336,16 +405,17 @@ const Header = () => {
 
         <nav className="main-nav">
           <Link to="/">Home</Link>
+          <Link to="/about">About Us</Link>
           <Link to="/shop">Shop</Link>
           <Link to="/maternity-pillows">Maternity</Link>
           <Link to="/baby-pillows">Baby & Kids</Link>
-          <Link to="/about">About Us</Link>
           <Link to="/contact">Contact</Link>
         </nav>
 
         {/* HEADER ACTIONS */}
 
         <div className="header-actions">
+
           {/* SEARCH */}
 
           <Link
@@ -403,7 +473,7 @@ const Header = () => {
               cartBounce ? "cart-bounce" : ""
             }`}
             data-cart-target="true"
-            aria-label="Cart"
+            aria-label={`Cart, ${cartCount} items`}
             title="Cart"
           >
             <span className="action-icon">🛍</span>
@@ -439,16 +509,35 @@ const Header = () => {
             mobileOpen ? "mobile-nav-open" : ""
           }`}
         >
-          <Link to="/" onClick={closeMobileMenu}>Home</Link>
-          <Link to="/shop" onClick={closeMobileMenu}>Shop</Link>
-          <Link to="/maternity-pillows" onClick={closeMobileMenu}>
+          <Link to="/" onClick={closeMobileMenu}>
+            Home
+          </Link>
+ <Link to="/about" onClick={closeMobileMenu}>
+            About Us
+          </Link>
+          <Link to="/shop" onClick={closeMobileMenu}>
+            Shop
+          </Link>
+
+          <Link
+            to="/maternity-pillows"
+            onClick={closeMobileMenu}
+          >
             Maternity
           </Link>
-          <Link to="/baby-pillows" onClick={closeMobileMenu}>
+
+          <Link
+            to="/baby-pillows"
+            onClick={closeMobileMenu}
+          >
             Baby & Kids
           </Link>
-          <Link to="/about" onClick={closeMobileMenu}>About Us</Link>
-          <Link to="/contact" onClick={closeMobileMenu}>Contact</Link>
+
+         
+
+          <Link to="/contact" onClick={closeMobileMenu}>
+            Contact
+          </Link>
         </div>
       </div>
 

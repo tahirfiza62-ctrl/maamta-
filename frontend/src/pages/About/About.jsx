@@ -342,7 +342,7 @@ const About= () => {
             </span>
 
             <h2>
-              “Comfort is not just
+              “Comfort is not just 
               <span>something you feel.</span>
               <br />
               It is something you give.”
