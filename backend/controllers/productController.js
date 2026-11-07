@@ -144,28 +144,128 @@ const normalizeColors = (colors) => {
    GET /api/products
 ========================================================= */
 
+
+/* =========================================================
+   GET ACTIVE PRODUCTS
+   PUBLIC
+   GET /api/products?page=1&limit=8
+========================================================= */
+
 const getProducts = async (req, res) => {
   try {
-    const products = await Product.find({
-      active: true,
-    }).sort({
-      createdAt: -1,
-    });
+    // PAGE AND LIMIT
+    const page = Math.max(
+      1,
+      parseInt(req.query.page, 10) || 1
+    );
 
-    res.status(200).json({
+    const limit = Math.min(
+      24,
+      Math.max(1, parseInt(req.query.limit, 10) || 8)
+    );
+
+    const skip = (page - 1) * limit;
+
+    // BASE FILTER
+    const filter = {
+      active: true,
+    };
+
+    // CATEGORY FILTER
+    if (req.query.category && req.query.category !== "All") {
+      const category = normalizeCategory(req.query.category);
+
+      if (!category) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid product category.",
+        });
+      }
+
+      filter.category = category;
+    }
+
+    // SEARCH FILTER
+    if (
+      typeof req.query.search === "string" &&
+      req.query.search.trim()
+    ) {
+      const search = req.query.search.trim();
+
+      // Escape special regex characters.
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      filter.$or = [
+        {
+          name: {
+            $regex: escapedSearch,
+            $options: "i",
+          },
+        },
+        {
+          category: {
+            $regex: escapedSearch,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    // SORTING
+    const sortOptions = {
+      featured: { createdAt: -1 },
+      newest: { createdAt: -1 },
+      "low-high": { price: 1 },
+      "high-low": { price: -1 },
+      name: { name: 1 },
+    };
+
+    const sort = sortOptions[req.query.sort] ||
+      sortOptions.featured;
+
+    // FETCH PRODUCTS AND TOTAL COUNT IN PARALLEL
+    const [products, totalProducts] = await Promise.all([
+      Product.find(filter)
+        .select(
+          "name price oldPrice category image images active stock createdAt"
+        )
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      Product.countDocuments(filter),
+    ]);
+
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    return res.status(200).json({
       success: true,
       products,
+
+      pagination: {
+        currentPage: page,
+        limit,
+        totalProducts,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
     });
   } catch (error) {
     console.error("GET PRODUCTS ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Unable to fetch products.",
       error: error.message,
     });
   }
 };
+
 
 /* =========================================================
    GET ALL PRODUCTS
