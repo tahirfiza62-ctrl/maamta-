@@ -1,44 +1,54 @@
 
-<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
   <url>
-    <loc>https://maamta.vercel.app/</loc>
+    <loc>https://maamtacircle.com/</loc>
     <priority>1.0</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/shop</loc>
+    <loc>https://maamtacircle.com/shop</loc>
     <priority>0.9</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/categories</loc>
+    <loc>https://maamtacircle.com/categories</loc>
     <priority>0.8</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/maternity-pillows</loc>
+    <loc>https://maamtacircle.com/maternity-pillows</loc>
     <priority>0.8</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/baby-pillows</loc>
+    <loc>https://maamtacircle.com/baby-pillows</loc>
     <priority>0.8</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/about</loc>
+    <loc>https://maamtacircle.com/about</loc>
     <priority>0.6</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/contact</loc>
+    <loc>https://maamtacircle.com/contact</loc>
     <priority>0.6</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/faq</loc>
+    <loc>https://maamtacircle.com/faq</loc>
     <priority>0.5</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/shipping-policy</loc>
+    <loc>https://maamtacircle.com/shipping-policy</loc>
     <priority>0.4</priority>
   </url>
+
   <url>
-    <loc>https://maamta.vercel.app/return-policy</loc>
+    <loc>https://maamtacircle.com/return-policy</loc>
     <priority>0.4</priority>
   </url>
+
 </urlset>
