@@ -53,7 +53,7 @@ const slides = [
 
   {
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1794066155/cc28cb83dc8ff85ff44fca8db783f363.webp",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794067725/her3.webp",
 
     alt: "Mother with child",
 

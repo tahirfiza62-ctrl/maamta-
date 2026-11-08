@@ -409,7 +409,7 @@ const About= () => {
 
               <div className="motherhood-image-main">
                 <img
-                  src="https://res.cloudinary.com/iysbraru/image/upload/v1794149349/Code_Generated_Image.webp"
+                  src="https://res.cloudinary.com/iysbraru/image/upload/v1794067726/her5.webp"
                   alt="MAAMTA maternity comfort"
                 />
               </div>
