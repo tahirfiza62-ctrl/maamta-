@@ -1,0 +1,14 @@
+
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /login
+Disallow: /register
+Disallow: /profile
+Disallow: /cart
+Disallow: /checkout
+Disallow: /my-orders
+Disallow: /wishlist
+
+Sitemap: https://maamta.vercel.app/sitemap.xml
