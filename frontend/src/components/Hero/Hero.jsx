@@ -20,7 +20,7 @@ import "./Hero.css";
 const slides = [
   {
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1790683770/hey2.jpg",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794066181/hey2.webp",
 
     alt: "Mother holding her baby",
 
@@ -31,7 +31,7 @@ const slides = [
 
   {
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1791613648/her3.jpg",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794066179/hey3.webp",
 
     alt: "Sleeping baby",
 
@@ -42,7 +42,7 @@ const slides = [
 
   {
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1790683770/hey4.jpg",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794066179/hey4.webp",
 
     alt: "Mother and baby together",
 
@@ -53,7 +53,7 @@ const slides = [
 
   {
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1791402609/ChatGPT_Image_Oct_8_2026_12_48_07_AM.png",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794066155/cc28cb83dc8ff85ff44fca8db783f363.webp",
 
     alt: "Mother with child",
 

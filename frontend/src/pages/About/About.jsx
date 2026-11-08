@@ -59,7 +59,7 @@ const About= () => {
 
               <div className="about-main-image">
                 <img
-                  src="https://res.cloudinary.com/iysbraru/image/upload/v1790508893/cush.jpg"
+                  src="https://res.cloudinary.com/iysbraru/image/upload/v1794066157/cush.webp"
                   alt="MAAMTA comfort collection"
                 />
               </div>
@@ -148,7 +148,7 @@ const About= () => {
             <div className="about-story-image">
 
               <img
-                src="https://res.cloudinary.com/iysbraru/image/upload/v1790508989/comfort.jpg"
+                src="https://res.cloudinary.com/iysbraru/image/upload/v1794066156/comfort.webp"
                 alt="MAMTA baby comfort collection"
               />
 
@@ -409,7 +409,7 @@ const About= () => {
 
               <div className="motherhood-image-main">
                 <img
-                  src="https://res.cloudinary.com/iysbraru/image/upload/v1790504967/Screenshot_2026-09-27_at_3.28.57_PM.png"
+                  src="https://res.cloudinary.com/iysbraru/image/upload/v1794149349/Code_Generated_Image.webp"
                   alt="MAAMTA maternity comfort"
                 />
               </div>

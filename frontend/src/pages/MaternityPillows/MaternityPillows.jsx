@@ -550,7 +550,7 @@ const MaternityPillows = () => {
 
               <div className="maternity-main-image">
                 <img
-                  src="https://res.cloudinary.com/iysbraru/image/upload/v1791675547/Golden_Mother-Child_Memory_Collage.png"
+                  src="https://res.cloudinary.com/iysbraru/image/upload/v1794067725/her3.webp"
                   alt="Mother and baby"
                   className="maternity-hero-image"
                 />

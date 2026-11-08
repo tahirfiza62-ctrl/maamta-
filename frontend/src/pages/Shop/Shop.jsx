@@ -939,7 +939,7 @@ const Shop = () => {
 
               <div className="hero-image-main">
                 <img
-                  src="https://res.cloudinary.com/iysbraru/image/upload/v1791402609/ChatGPT_Image_Oct_8_2026_12_48_07_AM.png"
+                  src="https://res.cloudinary.com/iysbraru/image/upload/v1794066222/image12_jpg.webp"
                   alt="MAMTA comfort collection"
                   loading="eager"
                   fetchPriority="high"

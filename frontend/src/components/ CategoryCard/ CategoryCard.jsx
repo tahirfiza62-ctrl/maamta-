@@ -9,7 +9,7 @@ const categories = [
     title: "Maternity Pillows",
     text: "Comfort designed for beautiful motherhood moments.",
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1791132152/hello.jpg",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794067864/pillow.webp",
     link: "/maternity-pillows",
   },
   {
@@ -37,7 +37,7 @@ const categories = [
     title: "Accessories",
     text: "Beautiful little essentials made to add comfort and softness to your everyday routine.",
     image:
-      "https://res.cloudinary.com/iysbraru/image/upload/v1790788491/scruchies.jpg",
+      "https://res.cloudinary.com/iysbraru/image/upload/v1794067873/scruchies.webp",
     link: "/accessories",
   },
 ];
